@@ -1,6 +1,6 @@
 {
-  "id": "4f2e67ce-1f52-4cc6-a45b-5459826a58f6",
-  "prevId": "00000000-0000-0000-0000-000000000000",
+  "id": "b0b8be6d-f6f1-4466-aeac-117264cf2ae9",
+  "prevId": "4f2e67ce-1f52-4cc6-a45b-5459826a58f6",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -337,7 +337,10 @@
       "name": "otp_type",
       "schema": "public",
       "values": [
-        "PHONE_VERIFICATION"
+        "PHONE_VERIFICATION",
+        "EMAIL_VERIFICATION",
+        "EMAIL_PASSWORD_RESET",
+        "PHONE_PASSWORD_RESET"
       ]
     },
     "public.role": {

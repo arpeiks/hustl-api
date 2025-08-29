@@ -1,6 +1,6 @@
 import { RoleMap, TRole } from '@/modules/drizzle/schema';
 import { HasNumber, HasLowerCase, HasUpperCase, HasSpecialCharacter } from '@/validators';
-import { IsEmail, IsIn, IsNotEmpty, IsPhoneNumber, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsIn, IsInt, IsNotEmpty, IsPhoneNumber, IsString, MinLength } from 'class-validator';
 
 export class CreateAccountBody {
   @IsEmail()
@@ -21,9 +21,9 @@ export class CreateAccountBody {
   @IsNotEmpty()
   fullName: string;
 
-  @IsString()
+  @IsInt()
   @IsNotEmpty()
-  niche: string;
+  serviceId: number;
 
   @IsString()
   @IsNotEmpty()
@@ -61,13 +61,6 @@ export class LoginBody {
   password: string;
 }
 
-export class SendPhoneVerificationCodeBody {
-  @IsString()
-  @IsNotEmpty()
-  @IsPhoneNumber()
-  phone: string;
-}
-
 export class VerifyPhoneBody {
   @IsString()
   @IsNotEmpty()
@@ -77,4 +70,46 @@ export class VerifyPhoneBody {
   @IsString()
   @IsNotEmpty()
   code: string;
+}
+
+export class VerifyEmailBody {
+  @IsString()
+  @IsNotEmpty()
+  @IsEmail()
+  email: string;
+
+  @IsString()
+  @IsNotEmpty()
+  code: string;
+}
+
+export class SendEmailVerificationCodeBody {
+  @IsString()
+  @IsNotEmpty()
+  @IsEmail()
+  email: string;
+}
+
+export class SendPasswordResetCodeBody {
+  @IsString()
+  @IsNotEmpty()
+  identifier: string;
+}
+
+export class ResetPasswordBody {
+  @IsString()
+  @IsNotEmpty()
+  identifier: string;
+
+  @IsString()
+  @IsNotEmpty()
+  code: string;
+
+  @IsString()
+  @HasNumber()
+  @MinLength(8)
+  @HasLowerCase()
+  @HasUpperCase()
+  @HasSpecialCharacter()
+  password: string;
 }

@@ -11,13 +11,21 @@ const timestamps = {
   updatedAt: timestamp(tzConfig).defaultNow().notNull(),
 };
 
-export const OtpTypeMap = ['PHONE_VERIFICATION'] as const;
+export const OtpTypeMap = [
+  'PHONE_VERIFICATION',
+  'EMAIL_VERIFICATION',
+  'EMAIL_PASSWORD_RESET',
+  'PHONE_PASSWORD_RESET',
+] as const;
 export const OtpTypeEnum = pgEnum('otp_type', OtpTypeMap);
 export type TOtpType = (typeof OtpTypeEnum.enumValues)[number];
 
-export const RoleMap = ['user', 'artisan'] as const;
+export const RoleMap = ['user', 'artisan', 'admin'] as const;
 export type TRole = (typeof RoleEnum.enumValues)[number];
 export const RoleEnum = pgEnum('role', RoleMap);
+
+export type TAuth = typeof Auth.$inferSelect;
+export type TUser = typeof User.$inferSelect & { auth?: TAuth };
 
 export const User = hustlSchema.table('user', {
   id: serial().primaryKey(),
@@ -25,7 +33,7 @@ export const User = hustlSchema.table('user', {
   fullName: varchar().notNull(),
   email: varchar().unique().notNull(),
   phone: varchar().unique().notNull(),
-  niche: varchar(),
+  serviceId: integer().references(() => Service.id),
   avatar: varchar(),
   address: varchar(),
   city: varchar(),
@@ -50,23 +58,29 @@ export const Otp = hustlSchema.table('otp', {
   id: serial('id').primaryKey(),
   code: varchar('code'),
   type: OtpTypeEnum('type'),
-  userId: integer('user_id')
-    .unique()
-    .references(() => User.id),
+  identifier: varchar('identifier'),
   expiredAt: timestamp('expired_at', tzConfig).defaultNow(),
   createdAt: timestamp('created_at', tzConfig).defaultNow(),
   updatedAt: timestamp('updated_at', tzConfig).defaultNow(),
 });
 
+export const Service = hustlSchema.table('service', {
+  id: serial().primaryKey(),
+  name: varchar().notNull(),
+  description: text(),
+  ...timestamps,
+});
+
 export const UserRelations = relations(User, ({ one }) => ({
   otp: one(Otp),
   auth: one(Auth),
+  service: one(Service),
 }));
 
 export const AuthRelations = relations(Auth, ({ one }) => ({
   user: one(User, { fields: [Auth.userId], references: [User.id] }),
 }));
 
-export const OtpRelations = relations(Otp, ({ one }) => ({
-  user: one(User, { fields: [Otp.userId], references: [User.id] }),
+export const ServiceRelations = relations(Service, ({ many }) => ({
+  users: many(User),
 }));

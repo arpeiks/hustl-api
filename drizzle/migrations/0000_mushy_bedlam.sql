@@ -1,7 +1,7 @@
 CREATE SCHEMA "hustl";
 --> statement-breakpoint
 CREATE TYPE "public"."otp_type" AS ENUM('PHONE_VERIFICATION');--> statement-breakpoint
-CREATE TYPE "public"."role" AS ENUM('user', 'artisan');--> statement-breakpoint
+CREATE TYPE "public"."role" AS ENUM('user', 'artisan', 'admin');--> statement-breakpoint
 CREATE TABLE "hustl"."auth" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"user_id" integer NOT NULL,
@@ -17,11 +17,19 @@ CREATE TABLE "hustl"."otp" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"code" varchar,
 	"type" "otp_type",
-	"user_id" integer,
+	"identifier" varchar,
 	"expired_at" timestamp with time zone DEFAULT now(),
 	"created_at" timestamp with time zone DEFAULT now(),
-	"updated_at" timestamp with time zone DEFAULT now(),
-	CONSTRAINT "otp_user_id_unique" UNIQUE("user_id")
+	"updated_at" timestamp with time zone DEFAULT now()
+);
+--> statement-breakpoint
+CREATE TABLE "hustl"."service" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"name" varchar NOT NULL,
+	"description" text,
+	"deleted_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "hustl"."user" (
@@ -30,7 +38,7 @@ CREATE TABLE "hustl"."user" (
 	"full_name" varchar NOT NULL,
 	"email" varchar NOT NULL,
 	"phone" varchar NOT NULL,
-	"niche" varchar,
+	"service_id" integer,
 	"avatar" varchar,
 	"address" varchar,
 	"city" varchar,
@@ -45,4 +53,4 @@ CREATE TABLE "hustl"."user" (
 );
 --> statement-breakpoint
 ALTER TABLE "hustl"."auth" ADD CONSTRAINT "auth_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "hustl"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "hustl"."otp" ADD CONSTRAINT "otp_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "hustl"."user"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "hustl"."user" ADD CONSTRAINT "user_service_id_service_id_fk" FOREIGN KEY ("service_id") REFERENCES "hustl"."service"("id") ON DELETE no action ON UPDATE no action;

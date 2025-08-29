@@ -1,18 +1,28 @@
+import {
+  Inject,
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  UnauthorizedException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
+
 import * as Dto from './dto';
 import { TDatabase } from '@/types';
 import { DATABASE } from '@/consts';
 import { and, eq, gte, or } from 'drizzle-orm';
 import { generateOtp, minutesFromNow } from '@/utils';
-import { Auth, Otp, User } from '../drizzle/schema';
+import { CacheService } from '../cache/cache.service';
 import { ArgonService } from '@/services/argon.service';
 import { TokenService } from '@/services/token.service';
-import { ConflictException, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import { Auth, Otp, Service, TUser, User } from '../drizzle/schema';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly argon: ArgonService,
     private readonly token: TokenService,
+    private readonly cache: CacheService,
     @Inject(DATABASE) private readonly provider: TDatabase,
   ) {}
 
@@ -28,54 +38,17 @@ export class AuthService {
     if (samePhone) throw new ConflictException('User with this phone already exists');
     if (sameEmail) throw new ConflictException('User with this email already exists');
 
-    const hashedPassword = await this.argon.hash(body.password);
+    const service = await this.provider.query.Service.findFirst({ where: eq(Service.id, body.serviceId) });
+    if (!service) throw new NotFoundException('Service not found');
 
-    return await this.provider.transaction(async (tx) => {
-      const [user] = await tx
-        .insert(User)
-        .values({
-          city: body.city,
-          role: body.role,
-          phone: body.phone,
-          niche: body.niche,
-          email: body.email,
-          state: body.state,
-          address: body.address,
-          fullName: body.fullName,
-        })
-        .returning();
-
-      const code = Math.random() < 10 ? '0000' : generateOtp(4);
-      await tx.insert(Otp).values({ type: 'PHONE_VERIFICATION', code, userId: user.id, expiredAt: minutesFromNow(10) });
-
-      const token = this.token.generateAccessToken({ sub: user.id });
-      await tx.insert(Auth).values({ userId: user.id, token, password: hashedPassword }).returning();
-
-      return { ...user, token };
-    });
-  }
-
-  async HandleSendPhoneVerificationCode(body: Dto.SendPhoneVerificationCodeBody) {
-    const user = await this.provider.query.User.findFirst({
-      where: eq(User.phone, body.phone),
-      columns: { id: true, phone: true, phoneVerifiedAt: true },
-    });
-
-    if (!user?.id) return {};
-    if (user.phoneVerifiedAt) return {};
-
-    const otp = await this.provider.query.Otp.findFirst({
-      columns: { id: true },
-      where: and(eq(Otp.type, 'PHONE_VERIFICATION'), eq(Otp.userId, user.id), gte(Otp.expiredAt, new Date())),
-    });
-
-    if (otp?.id) return {};
+    const cacheKey = `auth_create_user_${body.phone}`;
+    await this.cache.set(cacheKey, body, 0);
 
     const code = Math.random() < 10 ? '0000' : generateOtp(4);
 
     await this.provider.insert(Otp).values({
       code,
-      userId: user.id,
+      identifier: body.phone,
       type: 'PHONE_VERIFICATION',
       expiredAt: minutesFromNow(10),
     });
@@ -84,19 +57,14 @@ export class AuthService {
   }
 
   async HandleVerifyPhone(body: Dto.VerifyPhoneBody) {
-    const user = await this.provider.query.User.findFirst({
-      where: eq(User.phone, body.phone),
-      columns: { id: true, phone: true, phoneVerifiedAt: true },
-    });
-
-    if (!user?.id) return {};
-    if (user.phoneVerifiedAt) return {};
+    const cacheKey = `auth_create_user_${body.phone}`;
+    const cachedUser = await this.cache.get<Dto.CreateAccountBody>(cacheKey);
+    if (!cachedUser) throw new UnauthorizedException('invalid or expired verification code');
 
     const otp = await this.provider.query.Otp.findFirst({
-      columns: { id: true },
       where: and(
         eq(Otp.code, body.code),
-        eq(Otp.userId, user.id),
+        eq(Otp.identifier, body.phone),
         gte(Otp.expiredAt, new Date()),
         eq(Otp.type, 'PHONE_VERIFICATION'),
       ),
@@ -104,10 +72,57 @@ export class AuthService {
 
     if (!otp?.id) throw new UnauthorizedException('invalid or expired verification code');
 
-    await this.provider
-      .update(User)
-      .set({ phoneVerifiedAt: new Date(), updatedAt: new Date() })
-      .where(eq(User.id, user.id));
+    const hashedPassword = await this.argon.hash(cachedUser.password);
+
+    const result = await this.provider.transaction(async (tx) => {
+      const [user] = await tx
+        .insert(User)
+        .values({
+          city: cachedUser.city,
+          role: cachedUser.role,
+          phone: cachedUser.phone,
+          email: cachedUser.email,
+          state: cachedUser.state,
+          address: cachedUser.address,
+          phoneVerifiedAt: new Date(),
+          fullName: cachedUser.fullName,
+          serviceId: cachedUser.serviceId,
+        })
+        .returning();
+
+      const token = this.token.generateAccessToken({ sub: user.id });
+      await tx.insert(Auth).values({ userId: user.id, token, password: hashedPassword });
+
+      return { ...user, token };
+    });
+
+    await this.cache.del(cacheKey);
+    await this.provider.delete(Otp).where(eq(Otp.id, otp.id));
+
+    return result;
+  }
+
+  async HandleVerifyEmail(body: Dto.VerifyEmailBody) {
+    const user = await this.provider.query.User.findFirst({ where: eq(User.email, body.email) });
+
+    if (!user?.id) throw new UnauthorizedException('invalid or expired verification code');
+
+    const otp = await this.provider.query.Otp.findFirst({
+      where: and(
+        eq(Otp.code, body.code),
+        eq(Otp.identifier, body.email),
+        gte(Otp.expiredAt, new Date()),
+        eq(Otp.type, 'EMAIL_VERIFICATION'),
+      ),
+    });
+
+    if (!otp?.id) throw new UnauthorizedException('invalid or expired verification code');
+
+    await this.provider.transaction(async (tx) => {
+      await tx.update(User).set({ emailVerifiedAt: new Date(), updatedAt: new Date() }).where(eq(User.id, user.id));
+    });
+
+    await this.provider.delete(Otp).where(eq(Otp.id, otp.id));
 
     return {};
   }
@@ -128,5 +143,93 @@ export class AuthService {
     await this.provider.update(Auth).set({ token, updatedAt: new Date() }).where(eq(Auth.userId, user.id));
 
     return { ...user, auth: undefined, token };
+  }
+
+  async HandleSendEmailVerificationCode(body: Dto.SendEmailVerificationCodeBody) {
+    const user = await this.provider.query.User.findFirst({ where: eq(User.email, body.email) });
+
+    if (!user?.id) return {};
+    if (user.emailVerifiedAt) return {};
+
+    const code = Math.random() < 10 ? '0000' : generateOtp(4);
+
+    await this.provider.insert(Otp).values({
+      code,
+      identifier: body.email,
+      type: 'EMAIL_VERIFICATION',
+      expiredAt: minutesFromNow(10),
+    });
+
+    return {};
+  }
+
+  async HandleSendPasswordResetCode(body: Dto.SendPasswordResetCodeBody) {
+    const user = await this.provider.query.User.findFirst({
+      where: or(eq(User.email, body.identifier), eq(User.phone, body.identifier)),
+    });
+
+    if (!user?.id) return {};
+
+    const isEmail = body.identifier.includes('@');
+    const isPhone = !isEmail;
+
+    if (isEmail && !user.emailVerifiedAt) throw new UnprocessableEntityException();
+    if (isPhone && !user.phoneVerifiedAt) throw new UnprocessableEntityException();
+
+    const otpType = isEmail ? 'EMAIL_PASSWORD_RESET' : 'PHONE_PASSWORD_RESET';
+    const code = Math.random() < 10 ? '0000' : generateOtp(4);
+
+    await this.provider.insert(Otp).values({
+      code,
+      type: otpType,
+      identifier: body.identifier,
+      expiredAt: minutesFromNow(10),
+    });
+
+    return {};
+  }
+
+  async HandleResetPassword(body: Dto.ResetPasswordBody) {
+    const user = await this.provider.query.User.findFirst({
+      where: or(eq(User.email, body.identifier), eq(User.phone, body.identifier)),
+    });
+
+    if (!user?.id) throw new UnauthorizedException('invalid or expired verification code');
+
+    const isEmail = body.identifier.includes('@');
+    const isPhone = !isEmail;
+
+    if (isEmail && !user.emailVerifiedAt) throw new UnprocessableEntityException();
+    if (isPhone && !user.phoneVerifiedAt) throw new UnprocessableEntityException();
+
+    const expectedOtpType = isEmail ? 'EMAIL_PASSWORD_RESET' : 'PHONE_PASSWORD_RESET';
+
+    const otp = await this.provider.query.Otp.findFirst({
+      where: and(
+        eq(Otp.code, body.code),
+        gte(Otp.expiredAt, new Date()),
+        eq(Otp.type, expectedOtpType),
+        eq(Otp.identifier, body.identifier),
+      ),
+    });
+
+    if (!otp?.id) throw new UnauthorizedException('invalid or expired verification code');
+
+    const hashedPassword = await this.argon.hash(body.password);
+
+    await this.provider.transaction(async (tx) => {
+      await tx
+        .update(Auth)
+        .set({ token: null, password: hashedPassword, updatedAt: new Date() })
+        .where(eq(Auth.userId, user.id));
+    });
+
+    await this.provider.delete(Otp).where(eq(Otp.id, otp.id));
+
+    return {};
+  }
+
+  async HandleGetAuth(user: TUser) {
+    return { ...user, auth: undefined };
   }
 }
