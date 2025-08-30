@@ -64,3 +64,31 @@ export const generatePagination = (currentPage = 1, pageSize = 50, totalDataSize
     hasPreviousPage,
   };
 };
+
+export const calculateIntervalDate = (intervalUnit: string, interval: number) => {
+  const now = new Date();
+  const dayMs = 24 * 60 * 60 * 1000;
+  const weekMs = 7 * dayMs;
+  const monthMs = 30 * dayMs;
+  const yearMs = 365 * dayMs;
+
+  let intervalMs: number;
+  switch (intervalUnit) {
+    case 'day':
+      intervalMs = interval * dayMs;
+      break;
+    case 'week':
+      intervalMs = interval * weekMs;
+      break;
+    case 'month':
+      intervalMs = interval * monthMs;
+      break;
+    case 'year':
+      intervalMs = interval * yearMs;
+      break;
+    default:
+      intervalMs = interval * dayMs;
+  }
+
+  return new Date(now.getTime() + intervalMs);
+};

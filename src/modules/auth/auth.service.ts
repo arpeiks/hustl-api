@@ -15,7 +15,7 @@ import { generateOtp, minutesFromNow } from '@/utils';
 import { CacheService } from '../cache/cache.service';
 import { ArgonService } from '@/services/argon.service';
 import { TokenService } from '@/services/token.service';
-import { Auth, Otp, Service, TUser, User } from '../drizzle/schema';
+import { Auth, Otp, Service, Subscription, TUser, User, UserService } from '../drizzle/schema';
 
 @Injectable()
 export class AuthService {
@@ -35,11 +35,11 @@ export class AuthService {
     const sameEmail = existingUser?.email === body.email;
     const samePhone = existingUser?.phone === body.phone;
 
-    if (samePhone) throw new ConflictException('User with this phone already exists');
-    if (sameEmail) throw new ConflictException('User with this email already exists');
+    if (samePhone) throw new ConflictException('user with this phone already exists');
+    if (sameEmail) throw new ConflictException('user with this email already exists');
 
     const service = await this.provider.query.Service.findFirst({ where: eq(Service.id, body.serviceId) });
-    if (!service) throw new NotFoundException('Service not found');
+    if (!service) throw new NotFoundException('service type not found');
 
     const cacheKey = `auth_create_user_${body.phone}`;
     await this.cache.set(cacheKey, body, 0);
@@ -72,6 +72,12 @@ export class AuthService {
 
     if (!otp?.id) throw new UnauthorizedException('invalid or expired verification code');
 
+    const service = await this.provider.query.Service.findFirst({
+      columns: { id: true },
+      where: eq(Service.id, cachedUser.serviceId),
+    });
+    if (!service?.id) throw new UnprocessableEntityException();
+
     const hashedPassword = await this.argon.hash(cachedUser.password);
 
     const result = await this.provider.transaction(async (tx) => {
@@ -86,11 +92,11 @@ export class AuthService {
           address: cachedUser.address,
           phoneVerifiedAt: new Date(),
           fullName: cachedUser.fullName,
-          serviceId: cachedUser.serviceId,
         })
         .returning();
 
       const token = this.token.generateAccessToken({ sub: user.id });
+      await tx.insert(UserService).values({ serviceId: service.id, userId: user.id });
       await tx.insert(Auth).values({ userId: user.id, token, password: hashedPassword });
 
       return { ...user, token };
@@ -230,6 +236,15 @@ export class AuthService {
   }
 
   async HandleGetAuth(user: TUser) {
-    return { ...user, auth: undefined };
+    const services = await this.provider.query.UserService.findMany({
+      with: { service: true },
+      where: eq(UserService.userId, user.id),
+    });
+
+    const subscription = await this.provider.query.Subscription.findFirst({
+      where: and(eq(Subscription.userId, user.id), eq(Subscription.status, 'active')),
+    });
+
+    return { ...user, services, subscription, auth: undefined };
   }
 }

@@ -7,6 +7,8 @@ import { AuthModule } from '../auth/auth.module';
 import { CacheModule } from '../cache/cache.module';
 import { DrizzleModule } from '../drizzle/drizzle.module';
 import { ServiceModule } from '../service/service.module';
+import { CurrencyModule } from '../currency/currency.module';
+import { SubscriptionModule } from '../subscription/subscription.module';
 
 @Module({
   providers: [AppService],
@@ -16,6 +18,8 @@ import { ServiceModule } from '../service/service.module';
     CacheModule,
     DrizzleModule,
     ServiceModule,
+    CurrencyModule,
+    SubscriptionModule,
     ConfigModule.forRoot({ load: [config], isGlobal: true }),
   ],
 })

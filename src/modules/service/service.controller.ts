@@ -5,7 +5,7 @@ import { ServiceService } from './service.service';
 import { Auth as AuthGuard } from '../auth/decorators/auth.decorator';
 import { Body, Controller, Delete, Get, Param, Post, Put, Query, Version } from '@nestjs/common';
 
-@Controller('/services')
+@Controller('/service')
 export class ServiceController {
   constructor(private readonly serviceService: ServiceService) {}
 

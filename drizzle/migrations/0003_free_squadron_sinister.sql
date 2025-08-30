@@ -1,0 +1,1 @@
+ALTER TABLE "hustl"."subscription" DROP COLUMN "subscribed_at";
