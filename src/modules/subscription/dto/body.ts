@@ -1,15 +1,4 @@
-import {
-  Min,
-  IsIn,
-  IsInt,
-  IsArray,
-  IsString,
-  IsNumber,
-  IsBoolean,
-  IsOptional,
-  IsPositive,
-  IsNotEmpty,
-} from 'class-validator';
+import { Min, IsIn, IsInt, IsArray, IsString, IsNumber, IsBoolean, IsNotEmpty, IsOptional } from 'class-validator';
 import { IntervalUnitMap, TIntervalUnit } from '../../drizzle/schema';
 
 export class CreateFeatureBody {
@@ -80,35 +69,40 @@ export class CreateSubscriptionPlanBody {
 
 export class UpdateSubscriptionPlanBody {
   @IsString()
-  @IsOptional()
-  name?: string;
+  @IsNotEmpty()
+  name: string;
 
   @IsString()
-  @IsOptional()
-  description?: string;
+  @IsNotEmpty()
+  description: string;
 
+  @Min(1)
   @IsNumber()
-  @Min(0)
-  @IsOptional()
-  price?: number;
+  @IsNotEmpty()
+  price: number;
 
-  @IsNumber()
-  @IsOptional()
-  currency?: number;
+  @IsInt()
+  @IsNotEmpty()
+  currencyId: number;
 
-  @IsNumber()
-  @IsPositive()
-  @IsOptional()
-  durationDays?: number;
+  @IsString()
+  @IsNotEmpty()
+  @IsIn(IntervalUnitMap)
+  intervalUnit: TIntervalUnit;
+
+  @Min(1)
+  @IsInt()
+  @IsNotEmpty()
+  intervalCount: number;
 
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
 
   @IsArray()
-  @IsNumber({}, { each: true })
-  @IsOptional()
-  featureIds?: number[];
+  @IsNotEmpty()
+  @IsInt({ each: true })
+  featureIds: number[];
 }
 
 export class SubscribeBody {

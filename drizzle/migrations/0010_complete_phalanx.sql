@@ -1,0 +1,1 @@
+ALTER TABLE "hustl"."user" ADD COLUMN "bio" varchar;

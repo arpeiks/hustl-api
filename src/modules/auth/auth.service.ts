@@ -12,17 +12,15 @@ import { TDatabase } from '@/types';
 import { DATABASE } from '@/consts';
 import { and, eq, gte, or } from 'drizzle-orm';
 import { generateOtp, minutesFromNow } from '@/utils';
-import { CacheService } from '../cache/cache.service';
 import { ArgonService } from '@/services/argon.service';
 import { TokenService } from '@/services/token.service';
-import { Auth, Otp, Service, Subscription, TUser, User, UserService } from '../drizzle/schema';
+import { Auth, NotificationSetting, Otp, Service, Subscription, TUser, User, UserService } from '../drizzle/schema';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly argon: ArgonService,
     private readonly token: TokenService,
-    private readonly cache: CacheService,
     @Inject(DATABASE) private readonly provider: TDatabase,
   ) {}
 
@@ -41,25 +39,39 @@ export class AuthService {
     const service = await this.provider.query.Service.findFirst({ where: eq(Service.id, body.serviceId) });
     if (!service) throw new NotFoundException('service type not found');
 
-    const cacheKey = `auth_create_user_${body.phone}`;
-    await this.cache.set(cacheKey, body, 0);
-
+    const expiredAt = minutesFromNow(10);
     const code = Math.random() < 10 ? '0000' : generateOtp(4);
+    const hashedPassword = await this.argon.hash(body.password);
 
-    await this.provider.insert(Otp).values({
-      code,
-      identifier: body.phone,
-      type: 'PHONE_VERIFICATION',
-      expiredAt: minutesFromNow(10),
+    const result = await this.provider.transaction(async (tx) => {
+      const [user] = await tx
+        .insert(User)
+        .values({
+          city: body.city,
+          role: body.role,
+          phone: body.phone,
+          email: body.email,
+          state: body.state,
+          address: body.address,
+          fullName: body.fullName,
+        })
+        .returning();
+
+      const token = this.token.generateAccessToken({ sub: user.id });
+      await tx.insert(NotificationSetting).values({ userId: user.id });
+      await tx.insert(UserService).values({ serviceId: service.id, userId: user.id });
+      await tx.insert(Auth).values({ userId: user.id, token, password: hashedPassword });
+      await tx.insert(Otp).values({ code, identifier: body.phone, type: 'PHONE_VERIFICATION', expiredAt });
+
+      return { ...user, token };
     });
 
-    return {};
+    return result;
   }
 
   async HandleVerifyPhone(body: Dto.VerifyPhoneBody) {
-    const cacheKey = `auth_create_user_${body.phone}`;
-    const cachedUser = await this.cache.get<Dto.CreateAccountBody>(cacheKey);
-    if (!cachedUser) throw new UnauthorizedException('invalid or expired verification code');
+    const user = await this.provider.query.User.findFirst({ where: eq(User.phone, body.phone) });
+    if (!user?.id) throw new UnauthorizedException('invalid or expired verification code');
 
     const otp = await this.provider.query.Otp.findFirst({
       where: and(
@@ -72,40 +84,12 @@ export class AuthService {
 
     if (!otp?.id) throw new UnauthorizedException('invalid or expired verification code');
 
-    const service = await this.provider.query.Service.findFirst({
-      columns: { id: true },
-      where: eq(Service.id, cachedUser.serviceId),
-    });
-    if (!service?.id) throw new UnprocessableEntityException();
-
-    const hashedPassword = await this.argon.hash(cachedUser.password);
-
-    const result = await this.provider.transaction(async (tx) => {
-      const [user] = await tx
-        .insert(User)
-        .values({
-          city: cachedUser.city,
-          role: cachedUser.role,
-          phone: cachedUser.phone,
-          email: cachedUser.email,
-          state: cachedUser.state,
-          address: cachedUser.address,
-          phoneVerifiedAt: new Date(),
-          fullName: cachedUser.fullName,
-        })
-        .returning();
-
-      const token = this.token.generateAccessToken({ sub: user.id });
-      await tx.insert(UserService).values({ serviceId: service.id, userId: user.id });
-      await tx.insert(Auth).values({ userId: user.id, token, password: hashedPassword });
-
-      return { ...user, token };
+    await this.provider.transaction(async (tx) => {
+      await tx.delete(Otp).where(eq(Otp.id, otp.id));
+      await tx.update(User).set({ phoneVerifiedAt: new Date(), updatedAt: new Date() }).where(eq(User.id, user.id));
     });
 
-    await this.cache.del(cacheKey);
-    await this.provider.delete(Otp).where(eq(Otp.id, otp.id));
-
-    return result;
+    return {};
   }
 
   async HandleVerifyEmail(body: Dto.VerifyEmailBody) {
@@ -125,10 +109,9 @@ export class AuthService {
     if (!otp?.id) throw new UnauthorizedException('invalid or expired verification code');
 
     await this.provider.transaction(async (tx) => {
+      await tx.delete(Otp).where(eq(Otp.id, otp.id));
       await tx.update(User).set({ emailVerifiedAt: new Date(), updatedAt: new Date() }).where(eq(User.id, user.id));
     });
-
-    await this.provider.delete(Otp).where(eq(Otp.id, otp.id));
 
     return {};
   }
@@ -149,6 +132,13 @@ export class AuthService {
     await this.provider.update(Auth).set({ token, updatedAt: new Date() }).where(eq(Auth.userId, user.id));
 
     return { ...user, auth: undefined, token };
+  }
+
+  async HandleLogout(user: TUser) {
+    if (!user?.id) return {};
+
+    await this.provider.update(Auth).set({ token: null, updatedAt: new Date() }).where(eq(Auth.userId, user.id));
+    return {};
   }
 
   async HandleSendEmailVerificationCode(body: Dto.SendEmailVerificationCodeBody) {
@@ -224,13 +214,12 @@ export class AuthService {
     const hashedPassword = await this.argon.hash(body.password);
 
     await this.provider.transaction(async (tx) => {
+      await tx.delete(Otp).where(eq(Otp.id, otp.id));
       await tx
         .update(Auth)
         .set({ token: null, password: hashedPassword, updatedAt: new Date() })
         .where(eq(Auth.userId, user.id));
     });
-
-    await this.provider.delete(Otp).where(eq(Otp.id, otp.id));
 
     return {};
   }
@@ -242,9 +231,20 @@ export class AuthService {
     });
 
     const subscription = await this.provider.query.Subscription.findFirst({
+      with: { plan: { with: { features: { with: { feature: true } } } } },
       where: and(eq(Subscription.userId, user.id), eq(Subscription.status, 'active')),
     });
 
     return { ...user, services, subscription, auth: undefined };
+  }
+
+  async HandleUpdateProfile(user: TUser, body: Dto.UpdateProfileBody) {
+    const [updatedUser] = await this.provider
+      .update(User)
+      .set({ ...user, ...body })
+      .where(eq(User.id, user.id))
+      .returning();
+
+    return updatedUser;
   }
 }

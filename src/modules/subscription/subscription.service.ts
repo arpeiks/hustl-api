@@ -133,14 +133,14 @@ export class SubscriptionService {
       where: eq(SubscriptionPlan.id, id),
     });
 
-    if (!existingSubscriptionPlan?.id) throw new NotFoundException('Subscription plan not found');
+    if (!existingSubscriptionPlan?.id) throw new NotFoundException('subscription plan not found');
 
     const subscriptionPlan = await this.db.query.SubscriptionPlan.findFirst({
       columns: { id: true },
-      where: or(eq(SubscriptionPlan.id, id), eq(SubscriptionPlan.name, body.name || '')),
+      where: and(eq(SubscriptionPlan.name, body.name), ne(SubscriptionPlan.id, id)),
     });
 
-    if (subscriptionPlan?.id) throw new ConflictException('Subscription plan with this name already exists');
+    if (subscriptionPlan?.id) throw new ConflictException('subscription plan with this name already exists');
 
     await this.db.transaction(async (tx) => {
       const [subscriptionPlan] = await tx
@@ -177,7 +177,7 @@ export class SubscriptionService {
 
   async HandleSubscribe(user: TUser, body: Dto.SubscribeBody) {
     const plan = await this.db.query.SubscriptionPlan.findFirst({ where: eq(SubscriptionPlan.id, body.id) });
-    if (!plan?.id) throw new NotFoundException();
+    if (!plan?.id) throw new NotFoundException('subscription plan not found');
 
     await this.db.transaction(async (tx) => {
       await tx
@@ -218,6 +218,7 @@ export class SubscriptionService {
       limit,
       offset,
       where: and(activeFilter, queryFilter),
+      with: { features: { with: { feature: true } } },
     });
 
     const total = stats.count || 0;

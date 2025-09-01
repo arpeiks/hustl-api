@@ -9,6 +9,7 @@ import { DrizzleModule } from '../drizzle/drizzle.module';
 import { ServiceModule } from '../service/service.module';
 import { CurrencyModule } from '../currency/currency.module';
 import { SubscriptionModule } from '../subscription/subscription.module';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
   providers: [AppService],
@@ -20,6 +21,7 @@ import { SubscriptionModule } from '../subscription/subscription.module';
     ServiceModule,
     CurrencyModule,
     SubscriptionModule,
+    NotificationModule,
     ConfigModule.forRoot({ load: [config], isGlobal: true }),
   ],
 })

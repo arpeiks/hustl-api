@@ -11,22 +11,6 @@ import { Controller, Get, Post, Put, Delete, Body, Param, Query, Version } from 
 export class SubscriptionController {
   constructor(private readonly subscriptionService: SubscriptionService) {}
 
-  @Post('/feature')
-  @Version(VERSION_ONE)
-  @Auth({ roles: ['admin'] })
-  async HandleCreateFeature(@Body() body: Dto.CreateFeatureBody) {
-    const data = await this.subscriptionService.HandleCreateFeature(body);
-    return { data, message: RESPONSE.SUCCESS };
-  }
-
-  @Auth()
-  @Get('/feature')
-  @Version(VERSION_ONE)
-  async HandleGetFeatures(@Query() query: Dto.GetFeaturesQuery) {
-    const data = await this.subscriptionService.HandleGetFeatures(query);
-    return { data, message: RESPONSE.SUCCESS };
-  }
-
   @Auth()
   @Get('feature/:id')
   @Version(VERSION_ONE)
@@ -52,6 +36,46 @@ export class SubscriptionController {
   }
 
   @Auth()
+  @Get('/plan/:id')
+  @Version(VERSION_ONE)
+  async HandleGetSubscriptionPlanById(@Param('id') id: number) {
+    const data = await this.subscriptionService.HandleGetSubscriptionPlanById(id);
+    return { data, message: RESPONSE.SUCCESS };
+  }
+
+  @Put('/plan/:id')
+  @Version(VERSION_ONE)
+  @Auth({ roles: ['admin'] })
+  async HandleUpdateSubscriptionPlan(@Param('id') id: number, @Body() body: Dto.UpdateSubscriptionPlanBody) {
+    const data = await this.subscriptionService.HandleUpdateSubscriptionPlan(id, body);
+    return { data, message: RESPONSE.SUCCESS };
+  }
+
+  @Delete('/plan/:id')
+  @Version(VERSION_ONE)
+  @Auth({ roles: ['admin'] })
+  async HandleDeleteSubscriptionPlan(@Param('id') id: number) {
+    const data = await this.subscriptionService.HandleDeleteSubscriptionPlan(id);
+    return { data, message: RESPONSE.SUCCESS };
+  }
+
+  @Post('/feature')
+  @Version(VERSION_ONE)
+  @Auth({ roles: ['admin'] })
+  async HandleCreateFeature(@Body() body: Dto.CreateFeatureBody) {
+    const data = await this.subscriptionService.HandleCreateFeature(body);
+    return { data, message: RESPONSE.SUCCESS };
+  }
+
+  @Auth()
+  @Get('/feature')
+  @Version(VERSION_ONE)
+  async HandleGetFeatures(@Query() query: Dto.GetFeaturesQuery) {
+    const data = await this.subscriptionService.HandleGetFeatures(query);
+    return { data, message: RESPONSE.SUCCESS };
+  }
+
+  @Auth()
   @Get('/plan')
   @Version(VERSION_ONE)
   async HandleGetSubscriptionPlans(@Query() query: Dto.GetSubscriptionPlansQuery) {
@@ -68,28 +92,8 @@ export class SubscriptionController {
   }
 
   @Auth()
-  @Get('/plan/:id')
-  async HandleGetSubscriptionPlanById(@Param('id') id: number) {
-    const data = await this.subscriptionService.HandleGetSubscriptionPlanById(id);
-    return { data, message: RESPONSE.SUCCESS };
-  }
-
-  @Put('/plan/:id')
-  @Auth({ roles: ['admin'] })
-  async HandleUpdateSubscriptionPlan(@Param('id') id: number, @Body() body: Dto.UpdateSubscriptionPlanBody) {
-    const data = await this.subscriptionService.HandleUpdateSubscriptionPlan(id, body);
-    return { data, message: RESPONSE.SUCCESS };
-  }
-
-  @Delete('/plan/:id')
-  @Auth({ roles: ['admin'] })
-  async HandleDeleteSubscriptionPlan(@Param('id') id: number) {
-    const data = await this.subscriptionService.HandleDeleteSubscriptionPlan(id);
-    return { data, message: RESPONSE.SUCCESS };
-  }
-
-  @Auth()
   @Post('/subscribe')
+  @Version(VERSION_ONE)
   async HandleSubscribe(@ReqUser() user: TUser, @Body() body: Dto.SubscribeBody) {
     const data = await this.subscriptionService.HandleSubscribe(user, body);
     return { data, message: RESPONSE.SUCCESS };
@@ -97,6 +101,7 @@ export class SubscriptionController {
 
   @Auth()
   @Put('/cancel')
+  @Version(VERSION_ONE)
   async HandleCancelSubscription(@ReqUser() user: TUser) {
     const userSubscription = await this.subscriptionService.HandleCancelSubscription(user);
     return { success: true, data: userSubscription };
@@ -104,6 +109,7 @@ export class SubscriptionController {
 
   @Auth()
   @Get('/')
+  @Version(VERSION_ONE)
   async HandleGetSubscriptions(@ReqUser() user: TUser, @Query() query: Dto.GetSubscriptionsQuery) {
     const subscriptions = await this.subscriptionService.HandleGetSubscriptions(user, query);
     return { success: true, data: subscriptions };

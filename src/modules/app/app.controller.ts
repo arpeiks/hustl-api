@@ -5,6 +5,11 @@ import { Controller, Get } from '@nestjs/common';
 export class AppController {
   constructor(private readonly appService: AppService) {}
 
+  @Get('ping')
+  async ping() {
+    return await this.appService.ping();
+  }
+
   @Get('health')
   health() {
     return this.appService.healthCheck();

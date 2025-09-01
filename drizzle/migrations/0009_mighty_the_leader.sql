@@ -1,0 +1,1 @@
+ALTER TABLE "hustl"."subscription" DROP CONSTRAINT "subscription_userId_planId_unique";

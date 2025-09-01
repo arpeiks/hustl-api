@@ -1,6 +1,6 @@
 import { RoleMap, TRole } from '@/modules/drizzle/schema';
 import { HasNumber, HasLowerCase, HasUpperCase, HasSpecialCharacter } from '@/validators';
-import { IsEmail, IsIn, IsInt, IsNotEmpty, IsPhoneNumber, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsIn, IsInt, IsNotEmpty, IsOptional, IsPhoneNumber, IsString, MinLength } from 'class-validator';
 
 export class CreateAccountBody {
   @IsEmail()
@@ -112,4 +112,26 @@ export class ResetPasswordBody {
   @HasUpperCase()
   @HasSpecialCharacter()
   password: string;
+}
+
+export class UpdateProfileBody {
+  @IsString()
+  @IsOptional()
+  fullName?: string;
+
+  @IsOptional()
+  @IsString()
+  bio?: string;
+
+  @IsString()
+  @IsOptional()
+  address?: string;
+
+  @IsString()
+  @IsOptional()
+  state?: string;
+
+  @IsString()
+  @IsOptional()
+  city?: string;
 }

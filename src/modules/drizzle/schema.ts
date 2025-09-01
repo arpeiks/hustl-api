@@ -51,11 +51,13 @@ export type TSubscription = typeof Subscription.$inferSelect;
 export type TUser = typeof User.$inferSelect & { auth?: TAuth };
 export type TSubscriptionPlan = typeof SubscriptionPlan.$inferSelect;
 export type TSubscriptionFeature = typeof SubscriptionFeature.$inferSelect;
+export type TNotificationSetting = typeof NotificationSetting.$inferSelect;
 export type TSubscriptionPlanFeature = typeof SubscriptionPlanFeature.$inferSelect;
 
 export const User = hustlSchema.table('user', {
   id: serial().primaryKey(),
   role: RoleEnum().notNull().default('artisan'),
+  bio: varchar(),
   fullName: varchar().notNull(),
   email: varchar().unique().notNull(),
   phone: varchar().unique().notNull(),
@@ -65,6 +67,19 @@ export const User = hustlSchema.table('user', {
   state: varchar(),
   emailVerifiedAt: timestamp(tzConfig),
   phoneVerifiedAt: timestamp(tzConfig),
+  ...timestamps,
+});
+
+export const NotificationSetting = hustlSchema.table('notification_setting', {
+  id: serial().primaryKey(),
+  map: boolean().default(false),
+  chat: boolean().default(false),
+  email: boolean().default(false),
+  phone: boolean().default(false),
+  order: boolean().default(false),
+  userId: integer()
+    .references(() => User.id)
+    .notNull(),
   ...timestamps,
 });
 
@@ -158,28 +173,25 @@ export const SubscriptionPlanFeature = hustlSchema.table(
   (t) => [unique().on(t.planId, t.featureId)],
 );
 
-export const Subscription = hustlSchema.table(
-  'subscription',
-  {
-    id: serial().primaryKey(),
-    userId: integer()
-      .references(() => User.id)
-      .notNull(),
-    planId: integer()
-      .references(() => SubscriptionPlan.id)
-      .notNull(),
-    status: SubscriptionStatusEnum().default('active'),
-    expiredAt: timestamp(tzConfig).notNull(),
-    ...timestamps,
-  },
-  (t) => [unique().on(t.userId, t.planId)],
-);
+export const Subscription = hustlSchema.table('subscription', {
+  id: serial().primaryKey(),
+  userId: integer()
+    .references(() => User.id)
+    .notNull(),
+  planId: integer()
+    .references(() => SubscriptionPlan.id)
+    .notNull(),
+  status: SubscriptionStatusEnum().default('active'),
+  expiredAt: timestamp(tzConfig).notNull(),
+  ...timestamps,
+});
 
 export const UserRelations = relations(User, ({ one, many }) => ({
   otp: one(Otp),
   auth: one(Auth),
   services: many(UserService),
   subscriptions: many(Subscription),
+  notificationSetting: one(NotificationSetting),
 }));
 
 export const AuthRelations = relations(Auth, ({ one }) => ({
@@ -220,4 +232,8 @@ export const SubscriptionRelations = relations(Subscription, ({ one }) => ({
 export const UserServiceRelations = relations(UserService, ({ one }) => ({
   user: one(User, { fields: [UserService.userId], references: [User.id] }),
   service: one(Service, { fields: [UserService.serviceId], references: [Service.id] }),
+}));
+
+export const NotificationSettingRelations = relations(NotificationSetting, ({ one }) => ({
+  user: one(User, { fields: [NotificationSetting.userId], references: [User.id] }),
 }));

@@ -5,7 +5,7 @@ import { TUser } from '../drizzle/schema';
 import { AuthService } from './auth.service';
 import { Auth } from './decorators/auth.decorator';
 import { ReqUser } from './decorators/user.decorator';
-import { Body, Controller, Get, Post, Version } from '@nestjs/common';
+import { Body, Controller, Get, Post, Put, Version } from '@nestjs/common';
 
 @Controller('/auth')
 export class AuthController {
@@ -57,6 +57,22 @@ export class AuthController {
   @Version(VERSION_ONE)
   async HandleLogin(@Body() body: Dto.LoginBody) {
     const data = await this.auth.HandleLogin(body);
+    return { data, message: RESPONSE.SUCCESS };
+  }
+
+  @Auth()
+  @Post('/logout')
+  @Version(VERSION_ONE)
+  async HandleLogout(@ReqUser() user: TUser) {
+    const data = await this.auth.HandleLogout(user);
+    return { data, message: RESPONSE.SUCCESS };
+  }
+
+  @Auth()
+  @Put('/profile')
+  @Version(VERSION_ONE)
+  async HandleUpdateProfile(@ReqUser() user: TUser, @Body() body: Dto.UpdateProfileBody) {
+    const data = await this.auth.HandleUpdateProfile(user, body);
     return { data, message: RESPONSE.SUCCESS };
   }
 
