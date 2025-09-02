@@ -1,6 +1,5 @@
-import { RoleMap, TRole } from '@/modules/drizzle/schema';
 import { HasNumber, HasLowerCase, HasUpperCase, HasSpecialCharacter } from '@/validators';
-import { IsEmail, IsIn, IsInt, IsNotEmpty, IsOptional, IsPhoneNumber, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsPhoneNumber, IsString, MinLength } from 'class-validator';
 
 export class CreateAccountBody {
   @IsEmail()
@@ -8,34 +7,10 @@ export class CreateAccountBody {
   @IsNotEmpty()
   email: string;
 
-  @IsNotEmpty()
-  @IsIn(RoleMap)
-  role: TRole;
-
   @IsString()
   @IsNotEmpty()
   @IsPhoneNumber()
   phone: string;
-
-  @IsString()
-  @IsNotEmpty()
-  fullName: string;
-
-  @IsInt()
-  @IsNotEmpty()
-  serviceId: number;
-
-  @IsString()
-  @IsNotEmpty()
-  address: string;
-
-  @IsString()
-  @IsNotEmpty()
-  state: string;
-
-  @IsString()
-  @IsNotEmpty()
-  city: string;
 
   @IsString()
   @HasNumber()
@@ -119,19 +94,16 @@ export class UpdateProfileBody {
   @IsOptional()
   fullName?: string;
 
+  @IsEmail()
   @IsOptional()
-  @IsString()
-  bio?: string;
+  email?: string;
 
   @IsString()
   @IsOptional()
-  address?: string;
+  phone?: string;
+}
 
-  @IsString()
-  @IsOptional()
-  state?: string;
-
-  @IsString()
-  @IsOptional()
-  city?: string;
+export class UploadProfilePhotoBody {
+  @IsNotEmpty()
+  file: Express.Multer.File;
 }

@@ -3,9 +3,10 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { ArgonService } from '@/services/argon.service';
 import { TokenService } from '@/services/token.service';
+import { CloudinaryModule } from '../cloudinary/cloudinary.module';
 
 @Module({
-  imports: [],
+  imports: [CloudinaryModule],
   controllers: [AuthController],
   providers: [AuthService, ArgonService, TokenService],
 })

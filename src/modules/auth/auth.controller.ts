@@ -5,7 +5,8 @@ import { TUser } from '../drizzle/schema';
 import { AuthService } from './auth.service';
 import { Auth } from './decorators/auth.decorator';
 import { ReqUser } from './decorators/user.decorator';
-import { Body, Controller, Get, Post, Put, Version } from '@nestjs/common';
+import { ImageInterceptor } from '@/interceptors/file.interceptor';
+import { Body, Controller, Get, Post, Put, Version, UseInterceptors, UploadedFile } from '@nestjs/common';
 
 @Controller('/auth')
 export class AuthController {
@@ -43,6 +44,15 @@ export class AuthController {
   @Post('/verify/email')
   async HandleVerifyEmail(@Body() body: Dto.VerifyEmailBody) {
     const data = await this.auth.HandleVerifyEmail(body);
+    return { data, message: RESPONSE.SUCCESS };
+  }
+
+  @Auth()
+  @Put('/avatar')
+  @Version(VERSION_ONE)
+  @UseInterceptors(ImageInterceptor)
+  async HandleUploadAvatar(@ReqUser() user: TUser, @UploadedFile() file: Express.Multer.File) {
+    const data = await this.auth.HandleUploadAvatar(user, file);
     return { data, message: RESPONSE.SUCCESS };
   }
 

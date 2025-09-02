@@ -43,7 +43,12 @@ export const IntervalUnitMap = ['day', 'week', 'month', 'year'] as const;
 export const IntervalUnitEnum = pgEnum('interval_unit', IntervalUnitMap);
 export type TIntervalUnit = (typeof IntervalUnitEnum.enumValues)[number];
 
+export const WalletTypeMap = ['personal', 'business'] as const;
+export const WalletTypeEnum = pgEnum('wallet_type', WalletTypeMap);
+export type TWalletType = (typeof WalletTypeEnum.enumValues)[number];
+
 export type TAuth = typeof Auth.$inferSelect;
+export type TWallet = typeof Wallet.$inferSelect;
 export type TService = typeof Service.$inferSelect;
 export type TCurrency = typeof Currency.$inferSelect;
 export type TUserService = typeof UserService.$inferSelect;
@@ -186,9 +191,24 @@ export const Subscription = hustlSchema.table('subscription', {
   ...timestamps,
 });
 
+export const Wallet = hustlSchema.table('wallet', {
+  id: serial().primaryKey(),
+  userId: integer()
+    .references(() => User.id)
+    .notNull(),
+  currencyId: integer()
+    .references(() => Currency.id)
+    .notNull(),
+  type: WalletTypeEnum().notNull().default('personal'),
+  balance: integer().notNull().default(0),
+  isActive: boolean().default(true),
+  ...timestamps,
+});
+
 export const UserRelations = relations(User, ({ one, many }) => ({
   otp: one(Otp),
   auth: one(Auth),
+  wallets: many(Wallet),
   services: many(UserService),
   subscriptions: many(Subscription),
   notificationSetting: one(NotificationSetting),
@@ -213,6 +233,7 @@ export const SubscriptionPlanRelations = relations(SubscriptionPlan, ({ many, on
 }));
 
 export const CurrencyRelations = relations(Currency, ({ many }) => ({
+  wallets: many(Wallet),
   subscriptionPlans: many(SubscriptionPlan),
 }));
 
@@ -236,4 +257,9 @@ export const UserServiceRelations = relations(UserService, ({ one }) => ({
 
 export const NotificationSettingRelations = relations(NotificationSetting, ({ one }) => ({
   user: one(User, { fields: [NotificationSetting.userId], references: [User.id] }),
+}));
+
+export const WalletRelations = relations(Wallet, ({ one }) => ({
+  user: one(User, { fields: [Wallet.userId], references: [User.id] }),
+  currency: one(Currency, { fields: [Wallet.currencyId], references: [Currency.id] }),
 }));
