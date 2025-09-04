@@ -14,6 +14,8 @@ import { NotificationModule } from '../notification/notification.module';
 import { OrderModule } from '../order/order.module';
 import { ProductModule } from '../product/product.module';
 import { CatalogModule } from '../catalog/catalog.module';
+import { StoreModule } from '../store/store.module';
+import { CartModule } from '../cart/cart.module';
 
 @Module({
   providers: [AppService],
@@ -30,6 +32,8 @@ import { CatalogModule } from '../catalog/catalog.module';
     OrderModule,
     ProductModule,
     CatalogModule,
+    StoreModule,
+    CartModule,
     ConfigModule.forRoot({ load: [config], isGlobal: true }),
   ],
 })

@@ -1,130 +1,120 @@
-import * as Dto from './dto';
+import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 import { DATABASE } from '@/consts';
 import { TDatabase } from '@/types';
-import { eq, and, desc, count, inArray } from 'drizzle-orm';
-import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
-import { Order, OrderItem, Product, TUser, User } from '../drizzle/schema';
 import { generatePagination, getPage } from '@/utils';
+import { Order, OrderItem, Cart, CartItem } from '../drizzle/schema';
+import { eq, and, desc, count, ilike } from 'drizzle-orm';
+import * as Dto from './dto';
 
 @Injectable()
 export class OrderService {
   constructor(@Inject(DATABASE) private readonly db: TDatabase) {}
 
-  async createOrder(buyer: TUser, body: Dto.CreateOrderBody) {
-    const vendor = await this.db.query.User.findFirst({
-      where: eq(User.id, body.vendorId),
+  async createOrder(userId: number, body: Dto.CreateOrderBody) {
+    const cart = await this.db.query.Cart.findFirst({
+      where: eq(Cart.userId, userId),
+      with: {
+        items: {
+          with: {
+            product: {
+              with: { currency: true },
+            },
+            productSize: true,
+          },
+        },
+      },
     });
 
-    if (!vendor) {
-      throw new NotFoundException('Vendor not found');
+    if (!cart || cart.items.length === 0) {
+      throw new Error('Cart is empty');
     }
 
-    const productIds = body.items.map((item) => item.productId);
-    const products = await this.db.query.Product.findMany({
-      where: inArray(Product.id, productIds),
-      with: { productSizes: true },
-    });
-
-    if (products.length !== productIds.length) {
-      throw new NotFoundException('Some products not found');
-    }
-
+    const orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     let subtotal = 0;
-    const orderItems: any[] = [];
 
-    for (const item of body.items) {
-      const product = products.find((p) => p.id === item.productId);
-      if (!product) continue;
+    const orderItems = [];
 
-      let unitPrice = product.price;
-      let stockQuantity = product.stockQuantity;
-
-      if (item.productSizeId) {
-        const productSize = product.productSizes.find((ps) => ps.id === item.productSizeId);
-        if (!productSize) {
-          throw new NotFoundException(`Product size not found for product ${product.id}`);
-        }
-        unitPrice = productSize.price;
-        stockQuantity = productSize.stockQuantity;
-      }
-
-      if (stockQuantity < item.quantity) {
-        throw new BadRequestException(`Insufficient stock for product ${product.name}`);
-      }
-
-      const totalPrice = unitPrice * item.quantity;
-      subtotal += totalPrice;
+    for (const item of cart.items) {
+      const price = item.productSize?.price || item.product.price;
+      const itemTotal = price * item.quantity;
+      subtotal += itemTotal;
 
       orderItems.push({
         productId: item.productId,
         productSizeId: item.productSizeId,
         quantity: item.quantity,
-        unitPrice,
-        totalPrice,
+        unitPrice: price,
+        totalPrice: itemTotal,
       });
     }
 
-    const tax = Math.round(subtotal * 0.1);
+    const tax = Math.round(subtotal * 0.05);
     const shipping = 0;
     const total = subtotal + tax + shipping;
-
-    const orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     const [order] = await this.db
       .insert(Order)
       .values({
         orderNumber,
-        buyerId: buyer.id,
-        vendorId: body.vendorId,
+        buyerId: userId,
+        vendorId: cart.items[0].product.vendorId,
+        status: 'pending',
+        paymentStatus: 'pending',
         paymentMethod: body.paymentMethod,
         subtotal,
         tax,
         shipping,
         total,
-        currencyId: products[0].currencyId,
+        currencyId: cart.items[0].product.currencyId,
         shippingAddress: body.shippingAddress,
         billingAddress: body.billingAddress,
         notes: body.notes,
       })
       .returning();
 
-    const orderItemsWithOrderId = orderItems.map((item) => ({
-      ...item,
-      orderId: order.id,
-    }));
+    for (const item of orderItems) {
+      await this.db.insert(OrderItem).values({
+        orderId: order.id,
+        ...item,
+      });
+    }
 
-    await this.db.insert(OrderItem).values(orderItemsWithOrderId);
+    await this.db.delete(CartItem).where(eq(CartItem.cartId, cart.id));
 
-    return await this.getOrderById(order.id);
+    return order;
   }
 
-  async getOrders(user: TUser, query: Dto.GetOrdersQuery, type: 'buyer' | 'vendor') {
+  async getOrders(query: Dto.GetOrderQuery) {
     const { limit, offset } = getPage(query);
-    const userFilter = type === 'buyer' ? eq(Order.buyerId, user.id) : eq(Order.vendorId, user.id);
-    const statusFilter = query.status ? eq(Order.status, query.status as any) : undefined;
-    const paymentStatusFilter = query.paymentStatus ? eq(Order.paymentStatus, query.paymentStatus as any) : undefined;
+    const q = query.q ? `%${query.q}%` : undefined;
+    const queryFilter = q ? ilike(Order.orderNumber, q) : undefined;
+    const statusFilter = query.status ? eq(Order.status, query.status) : undefined;
 
     const [stats] = await this.db
       .select({ count: count(Order.id) })
       .from(Order)
-      .where(and(userFilter, statusFilter, paymentStatusFilter));
+      .where(and(statusFilter, queryFilter));
 
     const data = await this.db.query.Order.findMany({
       limit,
       offset,
-      where: and(userFilter, statusFilter, paymentStatusFilter),
       orderBy: desc(Order.createdAt),
       with: {
-        orderItems: {
-          with: {
-            product: true,
-            productSize: { with: { size: true } },
-          },
-        },
         buyer: true,
         vendor: true,
         currency: true,
+        orderItems: {
+          with: {
+            product: {
+              with: { brand: true, category: true },
+            },
+            productSize: {
+              with: { size: true },
+            },
+          },
+        },
       },
+      where: and(statusFilter, queryFilter),
     });
 
     const total = stats.count || 0;
@@ -136,15 +126,19 @@ export class OrderService {
     const order = await this.db.query.Order.findFirst({
       where: eq(Order.id, orderId),
       with: {
-        orderItems: {
-          with: {
-            product: true,
-            productSize: { with: { size: true } },
-          },
-        },
         buyer: true,
         vendor: true,
         currency: true,
+        orderItems: {
+          with: {
+            product: {
+              with: { brand: true, category: true },
+            },
+            productSize: {
+              with: { size: true },
+            },
+          },
+        },
       },
     });
 
@@ -155,31 +149,103 @@ export class OrderService {
     return order;
   }
 
-  async updateOrderStatus(user: TUser, orderId: number, body: Dto.UpdateOrderStatusBody) {
-    const order = await this.getOrderById(orderId);
+  async getBuyerOrders(userId: number, query: Dto.GetOrderQuery) {
+    const { limit, offset } = getPage(query);
+    const statusFilter = query.status ? eq(Order.status, query.status) : undefined;
+    const buyerFilter = eq(Order.buyerId, userId);
 
-    if (order.vendorId !== user.id && order.buyerId !== user.id) {
-      throw new NotFoundException('Order not found');
-    }
+    const [stats] = await this.db
+      .select({ count: count(Order.id) })
+      .from(Order)
+      .where(and(buyerFilter, statusFilter));
 
-    const [updatedOrder] = await this.db
+    const data = await this.db.query.Order.findMany({
+      limit,
+      offset,
+      orderBy: desc(Order.createdAt),
+      with: {
+        vendor: true,
+        currency: true,
+        orderItems: {
+          with: {
+            product: {
+              with: { brand: true, category: true },
+            },
+            productSize: {
+              with: { size: true },
+            },
+          },
+        },
+      },
+      where: and(buyerFilter, statusFilter),
+    });
+
+    const total = stats.count || 0;
+    const pagination = generatePagination(query.page, query.pageSize, total);
+    return { data, pagination };
+  }
+
+  async getVendorOrders(userId: number, query: Dto.GetOrderQuery) {
+    const { limit, offset } = getPage(query);
+    const statusFilter = query.status ? eq(Order.status, query.status) : undefined;
+    const vendorFilter = eq(Order.vendorId, userId);
+
+    const [stats] = await this.db
+      .select({ count: count(Order.id) })
+      .from(Order)
+      .where(and(vendorFilter, statusFilter));
+
+    const data = await this.db.query.Order.findMany({
+      limit,
+      offset,
+      orderBy: desc(Order.createdAt),
+      with: {
+        buyer: true,
+        currency: true,
+        orderItems: {
+          with: {
+            product: {
+              with: { brand: true, category: true },
+            },
+            productSize: {
+              with: { size: true },
+            },
+          },
+        },
+      },
+      where: and(vendorFilter, statusFilter),
+    });
+
+    const total = stats.count || 0;
+    const pagination = generatePagination(query.page, query.pageSize, total);
+    return { data, pagination };
+  }
+
+  async updateOrderStatus(orderId: number, body: Dto.UpdateOrderStatusBody) {
+    const [order] = await this.db
       .update(Order)
       .set({ status: body.status, updatedAt: new Date() })
       .where(eq(Order.id, orderId))
       .returning();
 
-    return updatedOrder;
-  }
-
-  async cancelOrder(user: TUser, orderId: number) {
-    const order = await this.getOrderById(orderId);
-
-    if (order.buyerId !== user.id) {
+    if (!order) {
       throw new NotFoundException('Order not found');
     }
 
-    if (order.status !== 'pending') {
-      throw new BadRequestException('Order cannot be cancelled');
+    return order;
+  }
+
+  async cancelOrder(orderId: number, userId: number) {
+    const order = await this.db.query.Order.findFirst({
+      where: eq(Order.id, orderId),
+    });
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    if (order.buyerId !== userId && order.vendorId !== userId) {
+      throw new Error('Unauthorized to cancel this order');
     }
 
     const [updatedOrder] = await this.db

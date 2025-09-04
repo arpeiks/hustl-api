@@ -69,13 +69,16 @@ export type TPaymentMethod = (typeof PaymentMethodEnum.enumValues)[number];
 
 export type TAuth = typeof Auth.$inferSelect;
 export type TSize = typeof Size.$inferSelect;
+export type TCart = typeof Cart.$inferSelect;
 export type TBrand = typeof Brand.$inferSelect;
 export type TOrder = typeof Order.$inferSelect;
+export type TStore = typeof Store.$inferSelect;
 export type TWallet = typeof Wallet.$inferSelect;
 export type TService = typeof Service.$inferSelect;
 export type TProduct = typeof Product.$inferSelect;
 export type TCurrency = typeof Currency.$inferSelect;
 export type TCategory = typeof Category.$inferSelect;
+export type TCartItem = typeof CartItem.$inferSelect;
 export type TOrderItem = typeof OrderItem.$inferSelect;
 export type TUserService = typeof UserService.$inferSelect;
 export type TProductSize = typeof ProductSize.$inferSelect;
@@ -364,6 +367,8 @@ export const OrderItem = hustlSchema.table('order_item', {
 export const UserRelations = relations(User, ({ one, many }) => ({
   otp: one(Otp),
   auth: one(Auth),
+  cart: one(Cart),
+  store: one(Store),
   wallets: many(Wallet),
   products: many(Product),
   services: many(UserService),
@@ -447,11 +452,13 @@ export const SizeRelations = relations(Size, ({ many, one }) => ({
 }));
 
 export const ProductRelations = relations(Product, ({ many, one }) => ({
+  cartItems: many(CartItem),
   orderItems: many(OrderItem),
   productSizes: many(ProductSize),
   productReviews: many(ProductReview),
   brand: one(Brand, { fields: [Product.brandId], references: [Brand.id] }),
   vendor: one(User, { fields: [Product.vendorId], references: [User.id] }),
+  store: one(Store, { fields: [Product.vendorId], references: [Store.ownerId] }),
   category: one(Category, { fields: [Product.categoryId], references: [Category.id] }),
   currency: one(Currency, { fields: [Product.currencyId], references: [Currency.id] }),
 }));
@@ -478,4 +485,61 @@ export const OrderItemRelations = relations(OrderItem, ({ one }) => ({
   order: one(Order, { fields: [OrderItem.orderId], references: [Order.id] }),
   product: one(Product, { fields: [OrderItem.productId], references: [Product.id] }),
   productSize: one(ProductSize, { fields: [OrderItem.productSizeId], references: [ProductSize.id] }),
+}));
+
+export const Store = hustlSchema.table('store', {
+  id: serial().primaryKey(),
+  name: varchar().notNull(),
+  description: text(),
+  address: text(),
+  phone: varchar(),
+  isOnline: boolean().default(true),
+  businessHours: text(),
+  deliveryRadius: integer().default(0),
+  deliveryFee: integer().default(0),
+  bankName: varchar(),
+  accountNumber: varchar(),
+  accountName: varchar(),
+  payoutSchedule: varchar().default('weekly'),
+  ownerId: integer()
+    .references(() => User.id)
+    .notNull(),
+  ...timestamps,
+});
+
+export const Cart = hustlSchema.table('cart', {
+  id: serial().primaryKey(),
+  userId: integer()
+    .references(() => User.id)
+    .notNull(),
+  ...timestamps,
+});
+
+export const CartItem = hustlSchema.table('cart_item', {
+  id: serial().primaryKey(),
+  cartId: integer()
+    .references(() => Cart.id)
+    .notNull(),
+  productId: integer()
+    .references(() => Product.id)
+    .notNull(),
+  productSizeId: integer().references(() => ProductSize.id),
+  quantity: integer().notNull().default(1),
+  ...timestamps,
+});
+
+export const StoreRelations = relations(Store, ({ one, many }) => ({
+  owner: one(User, { fields: [Store.ownerId], references: [User.id] }),
+  products: many(Product),
+}));
+
+export const CartRelations = relations(Cart, ({ one, many }) => ({
+  user: one(User, { fields: [Cart.userId], references: [User.id] }),
+  items: many(CartItem),
+}));
+
+export const CartItemRelations = relations(CartItem, ({ one }) => ({
+  cart: one(Cart, { fields: [CartItem.cartId], references: [Cart.id] }),
+  product: one(Product, { fields: [CartItem.productId], references: [Product.id] }),
+  productSize: one(ProductSize, { fields: [CartItem.productSizeId], references: [ProductSize.id] }),
 }));

@@ -1,14 +1,7 @@
-import { Type } from 'class-transformer';
-import { IsString, IsNumber, IsOptional, IsArray, IsEnum } from 'class-validator';
+import { IsString, IsOptional, IsInt, IsIn } from 'class-validator';
+import { OrderStatusMap, TOrderStatus, TPaymentMethod } from '@/modules/drizzle/schema';
 
 export class CreateOrderBody {
-  @IsNumber()
-  vendorId: number;
-
-  @IsArray()
-  @Type(() => OrderItemBody)
-  items: OrderItemBody[];
-
   @IsString()
   shippingAddress: string;
 
@@ -20,43 +13,32 @@ export class CreateOrderBody {
   @IsOptional()
   notes?: string;
 
-  @IsEnum(['wallet', 'card', 'bank_transfer', 'cash'])
-  paymentMethod: 'wallet' | 'card' | 'bank_transfer' | 'cash';
-}
-
-export class OrderItemBody {
-  @IsNumber()
-  productId: number;
-
-  @IsNumber()
+  @IsString()
   @IsOptional()
-  productSizeId?: number;
-
-  @IsNumber()
-  quantity: number;
+  paymentMethod?: TPaymentMethod;
 }
 
 export class UpdateOrderStatusBody {
-  @IsEnum(['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded'])
-  status: 'pending' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'refunded';
+  @IsString()
+  @IsIn(OrderStatusMap)
+  status: TOrderStatus;
 }
 
-export class GetOrdersQuery {
-  @IsNumber()
+export class GetOrderQuery {
+  @IsString()
   @IsOptional()
-  @Type(() => Number)
-  page?: number = 1;
+  q?: string;
 
-  @IsNumber()
+  @IsInt()
   @IsOptional()
-  @Type(() => Number)
-  pageSize?: number = 10;
+  page: number;
+
+  @IsInt()
+  @IsOptional()
+  pageSize: number;
 
   @IsString()
   @IsOptional()
-  status?: string;
-
-  @IsString()
-  @IsOptional()
-  paymentStatus?: string;
+  @IsIn(OrderStatusMap)
+  status?: TOrderStatus;
 }

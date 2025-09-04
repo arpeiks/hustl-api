@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsOptional, IsArray, IsBoolean, IsNotEmpty, IsInt } from 'class-validator';
+import { IsString, IsOptional, IsArray, IsBoolean, IsNotEmpty, IsInt, Min, Max } from 'class-validator';
 
 export class CreateProductBody {
   @IsString()
@@ -18,25 +18,20 @@ export class CreateProductBody {
   currencyId: number;
 
   @IsInt()
-  @IsNumber()
+  @IsOptional()
   brandId: number;
 
   @IsInt()
-  @IsNumber()
+  @IsOptional()
   categoryId: number;
 
-  @IsArray()
+  @IsInt()
   @IsOptional()
-  @IsString({ each: true })
-  images?: string[];
-
-  @IsBoolean()
-  @IsOptional()
-  isFeatured?: boolean;
+  isFeatured?: number;
 
   @IsInt()
-  @IsNotEmpty()
-  stockQuantity: number;
+  @IsOptional()
+  stockQuantity?: number;
 }
 
 export class UpdateProductBody {
@@ -105,6 +100,8 @@ export class CreateProductReviewBody {
   @IsNotEmpty()
   productId: number;
 
+  @Min(1)
+  @Max(5)
   @IsInt()
   @IsNotEmpty()
   rating: number;
@@ -139,11 +136,11 @@ export class GetProductsQuery {
   @IsOptional()
   vendorId: number;
 
-  @IsBoolean()
+  @IsInt()
   @IsOptional()
-  isFeatured?: boolean;
+  isFeatured?: number;
 
-  @IsBoolean()
+  @IsInt()
   @IsOptional()
-  isActive?: boolean;
+  isActive?: number;
 }

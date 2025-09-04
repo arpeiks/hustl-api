@@ -1,11 +1,22 @@
+import {
+  Size,
+  TUser,
+  Brand,
+  Order,
+  Product,
+  Category,
+  Currency,
+  OrderItem,
+  ProductSize,
+  ProductReview,
+} from '../drizzle/schema';
 import * as Dto from './dto';
 import { DATABASE } from '@/consts';
 import { TDatabase } from '@/types';
 import { generatePagination, getPage } from '@/utils';
-import { eq, and, desc, count, or, ilike } from 'drizzle-orm';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
-import { Injectable, Inject, NotFoundException } from '@nestjs/common';
-import { Product, ProductSize, ProductReview, TUser } from '../drizzle/schema';
+import { eq, and, desc, count, or, ilike, isNull } from 'drizzle-orm';
+import { Injectable, Inject, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 
 @Injectable()
 export class ProductService {
@@ -14,20 +25,38 @@ export class ProductService {
     private readonly cloudinaryService: CloudinaryService,
   ) {}
 
-  async createProduct(vendor: TUser, body: Dto.CreateProductBody, file?: Express.Multer.File) {
+  async createProduct(vendor: TUser, body: Dto.CreateProductBody, files?: Express.Multer.File[]) {
+    let images: string[] | undefined;
     const sku = this.generateSKU(vendor.id, body.name);
 
-    let images: string[] | undefined;
-    if (file) {
-      const imageUrl = await this.cloudinaryService.upload(file, 'product-images');
-      if (imageUrl) {
-        images = [imageUrl];
-      }
+    if (body.brandId) {
+      const brand = await this.db.query.Brand.findFirst({ where: eq(Brand.id, body.brandId) });
+      if (!brand) throw new NotFoundException('brand not found');
+      body.brandId = brand.id;
     }
 
+    if (body.categoryId) {
+      const category = await this.db.query.Category.findFirst({ where: eq(Category.id, body.categoryId) });
+      if (!category) throw new NotFoundException('category not found');
+      body.categoryId = category.id;
+    }
+
+    if (body.currencyId) {
+      const currency = await this.db.query.Currency.findFirst({ where: eq(Currency.id, body.currencyId) });
+      if (!currency) throw new NotFoundException('currency not found');
+      body.currencyId = currency.id;
+    }
+
+    if (files && files.length > 0) {
+      const uploadPromises = files.map((file) => this.cloudinaryService.upload(file, 'product-images'));
+      const imageUrls = await Promise.all(uploadPromises);
+      images = imageUrls.filter((url) => url !== null) as string[];
+    }
+
+    const stockQuantity = body?.stockQuantity || 1;
     const [product] = await this.db
       .insert(Product)
-      .values({ ...body, sku, vendorId: vendor.id, images })
+      .values({ ...body, isFeatured: !!body.isFeatured, stockQuantity, sku, vendorId: vendor.id, images })
       .returning();
 
     return await this.getProductById(product.id);
@@ -36,33 +65,41 @@ export class ProductService {
   async getProducts(query: Dto.GetProductsQuery) {
     const { limit, offset } = getPage(query);
     const q = query.q ? `%${query.q}%` : undefined;
-    const categoryFilter = query.categoryId ? eq(Product.categoryId, query.categoryId) : undefined;
+    const notDeletedFilter = isNull(Product.deletedAt);
     const brandFilter = query.brandId ? eq(Product.brandId, query.brandId) : undefined;
     const vendorFilter = query.vendorId ? eq(Product.vendorId, query.vendorId) : undefined;
-    const featuredFilter = query.isFeatured !== undefined ? eq(Product.isFeatured, query.isFeatured) : undefined;
-    const activeFilter = query.isActive !== undefined ? eq(Product.isActive, query.isActive) : undefined;
-
+    const categoryFilter = query.categoryId ? eq(Product.categoryId, query.categoryId) : undefined;
     const queryFilter = q ? or(ilike(Product.name, q), ilike(Product.description || '', q)) : undefined;
+    const activeFilter = query.isActive !== undefined ? eq(Product.isActive, !!query.isActive) : undefined;
+    const featuredFilter = query.isFeatured !== undefined ? eq(Product.isFeatured, !!query.isFeatured) : undefined;
 
     const [stats] = await this.db
       .select({ count: count(Product.id) })
       .from(Product)
-      .where(and(categoryFilter, brandFilter, vendorFilter, featuredFilter, activeFilter, queryFilter));
+      .where(
+        and(categoryFilter, brandFilter, vendorFilter, featuredFilter, activeFilter, queryFilter, notDeletedFilter),
+      );
 
     const data = await this.db.query.Product.findMany({
       limit,
       offset,
-      where: and(categoryFilter, brandFilter, vendorFilter, featuredFilter, activeFilter, queryFilter),
       orderBy: desc(Product.createdAt),
+      where: and(
+        categoryFilter,
+        brandFilter,
+        vendorFilter,
+        featuredFilter,
+        activeFilter,
+        queryFilter,
+        notDeletedFilter,
+      ),
       with: {
         brand: true,
-        category: true,
         vendor: true,
+        category: true,
         currency: true,
-        productSizes: {
-          with: { size: true },
-        },
         productReviews: true,
+        productSizes: { with: { size: true } },
       },
     });
 
@@ -73,7 +110,7 @@ export class ProductService {
 
   async getProductById(productId: number) {
     const product = await this.db.query.Product.findFirst({
-      where: eq(Product.id, productId),
+      where: and(eq(Product.id, productId), isNull(Product.deletedAt)),
       with: {
         brand: true,
         vendor: true,
@@ -89,18 +126,40 @@ export class ProductService {
     return product;
   }
 
-  async updateProduct(vendor: TUser, productId: number, body: Dto.UpdateProductBody, file?: Express.Multer.File) {
+  async updateProduct(vendor: TUser, productId: number, body: Dto.UpdateProductBody, files?: Express.Multer.File[]) {
     const product = await this.db.query.Product.findFirst({
-      where: and(eq(Product.id, productId), eq(Product.vendorId, vendor.id)),
+      where: and(eq(Product.id, productId), eq(Product.vendorId, vendor.id), isNull(Product.deletedAt)),
     });
 
-    if (!product) {
-      throw new NotFoundException('Product not found');
+    if (!product) throw new NotFoundException('product not found');
+
+    if (body.brandId) {
+      const brand = await this.db.query.Brand.findFirst({ where: eq(Brand.id, body.brandId) });
+      if (!brand) throw new NotFoundException('brand not found');
+      body.brandId = brand.id;
+    }
+
+    if (body.categoryId) {
+      const category = await this.db.query.Category.findFirst({ where: eq(Category.id, body.categoryId) });
+      if (!category) throw new NotFoundException('category not found');
+      body.categoryId = category.id;
+    }
+
+    if (body.currencyId) {
+      const currency = await this.db.query.Currency.findFirst({ where: eq(Currency.id, body.currencyId) });
+      if (!currency) throw new NotFoundException('currency not found');
+      body.currencyId = currency.id;
     }
 
     let images = body.images;
-    if (file) {
-      const imageUrl = await this.cloudinaryService.upload(file, 'product-images');
+    if (files && files.length > 0) {
+      const uploadPromises = files.map((file) => this.cloudinaryService.upload(file, 'product-images'));
+      const imageUrls = await Promise.all(uploadPromises);
+      images = imageUrls.filter((url) => url !== null) as string[];
+    }
+
+    if (files && files.length > 0) {
+      const imageUrl = await this.cloudinaryService.upload(files[0], 'product-images');
       if (imageUrl) {
         const currentImages = product.images || [];
         images = [...currentImages, imageUrl];
@@ -116,48 +175,56 @@ export class ProductService {
     return await this.getProductById(updatedProduct.id);
   }
 
-  async deleteProduct(vendor: TUser, productId: number) {
-    const product = await this.db.query.Product.findFirst({
-      where: and(eq(Product.id, productId), eq(Product.vendorId, vendor.id)),
-    });
-
-    if (!product) {
-      throw new NotFoundException('Product not found');
-    }
-
-    await this.db.delete(Product).where(eq(Product.id, productId));
-    return { success: true };
-  }
-
   async createProductSize(vendor: TUser, body: Dto.CreateProductSizeBody) {
     const product = await this.db.query.Product.findFirst({
-      where: and(eq(Product.id, body.productId), eq(Product.vendorId, vendor.id)),
+      where: and(eq(Product.id, body.productId), eq(Product.vendorId, vendor.id), isNull(Product.deletedAt)),
     });
 
-    if (!product) {
-      throw new NotFoundException('Product not found');
-    }
+    if (!product) throw new NotFoundException('product not found');
 
-    const [productSize] = await this.db.insert(ProductSize).values(body).returning();
+    const size = await this.db.query.Size.findFirst({ where: eq(Size.id, body.sizeId) });
+    if (!size) throw new NotFoundException('size not found');
+
+    const [productSize] = await this.db
+      .insert(ProductSize)
+      .values({ ...body, sizeId: size.id, productId: product.id })
+      .returning();
 
     return productSize;
   }
 
-  async createProductReview(user: TUser, body: Dto.CreateProductReviewBody) {
+  async deleteProduct(vendor: TUser, productId: number) {
     const product = await this.db.query.Product.findFirst({
-      where: eq(Product.id, body.productId),
+      where: and(eq(Product.id, productId), eq(Product.vendorId, vendor.id), isNull(Product.deletedAt)),
     });
 
-    if (!product) {
-      throw new NotFoundException('Product not found');
-    }
+    if (!product) throw new NotFoundException('product not found');
+
+    await this.db
+      .update(Product)
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(eq(Product.id, productId));
+
+    return {};
+  }
+
+  async createProductReview(user: TUser, body: Dto.CreateProductReviewBody) {
+    const product = await this.db.query.Product.findFirst({
+      where: and(eq(Product.id, body.productId), isNull(Product.deletedAt)),
+    });
+
+    if (!product) throw new NotFoundException('product not found');
+
+    const deliveredOrder = await this.db.query.Order.findFirst({
+      where: and(eq(Order.buyerId, user.id), eq(Order.status, 'delivered')),
+      with: { orderItems: { where: eq(OrderItem.productId, body.productId) } },
+    });
+
+    if (!deliveredOrder || deliveredOrder.orderItems.length === 0) throw new UnprocessableEntityException();
 
     const [review] = await this.db
       .insert(ProductReview)
-      .values({
-        ...body,
-        userId: user.id,
-      })
+      .values({ ...body, userId: user.id, productId: product.id, isVerified: true })
       .returning();
 
     return review;
@@ -170,19 +237,30 @@ export class ProductService {
     const brandFilter = query.brandId ? eq(Product.brandId, query.brandId) : undefined;
     const categoryFilter = query.categoryId ? eq(Product.categoryId, query.categoryId) : undefined;
     const queryFilter = q ? or(ilike(Product.name, q), ilike(Product.description || '', q)) : undefined;
-    const activeFilter = query.isActive !== undefined ? eq(Product.isActive, query.isActive) : undefined;
-    const featuredFilter = query.isFeatured !== undefined ? eq(Product.isFeatured, query.isFeatured) : undefined;
+    const activeFilter = query.isActive !== undefined ? eq(Product.isActive, !!query.isActive) : undefined;
+    const featuredFilter = query.isFeatured !== undefined ? eq(Product.isFeatured, !!query.isFeatured) : undefined;
+    const notDeletedFilter = isNull(Product.deletedAt);
 
     const [stats] = await this.db
       .select({ count: count(Product.id) })
       .from(Product)
-      .where(and(vendorFilter, categoryFilter, brandFilter, featuredFilter, activeFilter, queryFilter));
+      .where(
+        and(vendorFilter, categoryFilter, brandFilter, featuredFilter, activeFilter, queryFilter, notDeletedFilter),
+      );
 
     const data = await this.db.query.Product.findMany({
       limit,
       offset,
       orderBy: desc(Product.createdAt),
-      where: and(vendorFilter, categoryFilter, brandFilter, featuredFilter, activeFilter, queryFilter),
+      where: and(
+        vendorFilter,
+        categoryFilter,
+        brandFilter,
+        featuredFilter,
+        activeFilter,
+        queryFilter,
+        notDeletedFilter,
+      ),
       with: {
         brand: true,
         category: true,

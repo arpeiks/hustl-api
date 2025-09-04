@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as multer from 'multer';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 
 interface FileUploadOptions {
   fieldName?: string;
@@ -58,6 +58,30 @@ export const DocumentInterceptor = createFileUploadInterceptor({
     'application/msword',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   ],
+});
+
+export const MultiImageInterceptor = FilesInterceptor('files', 10, {
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      cb(null, 'uploads/');
+    },
+    filename: (_req, file, cb) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+      cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+    },
+  }),
+  fileFilter: (_req, file, cb) => {
+    const isValidType = file.mimetype.startsWith('image/');
+
+    if (isValidType) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'), false);
+    }
+  },
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB
+  },
 });
 
 export const createCustomFileUploadInterceptor = createFileUploadInterceptor;
