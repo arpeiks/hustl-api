@@ -1,0 +1,1 @@
+ALTER TABLE "hustl"."size" ALTER COLUMN "category_id" DROP NOT NULL;

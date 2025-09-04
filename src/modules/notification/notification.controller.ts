@@ -5,7 +5,7 @@ import { TUser } from '@/modules/drizzle/schema';
 import { NotificationService } from './notification.service';
 import { Auth } from '@/modules/auth/decorators/auth.decorator';
 import { ReqUser } from '@/modules/auth/decorators/user.decorator';
-import { Controller, Get, Put, Body, Version } from '@nestjs/common';
+import { Controller, Get, Put, Body, Version, Delete, Param } from '@nestjs/common';
 
 @Controller('notification')
 export class NotificationController {
@@ -24,6 +24,22 @@ export class NotificationController {
   @Version(VERSION_ONE)
   async updateNotificationSettings(@ReqUser() user: TUser, @Body() body: Dto.UpdateNotificationSettingsBody) {
     const data = await this.notificationService.updateNotificationSettings(user, body);
+    return { data, message: RESPONSE.SUCCESS };
+  }
+
+  @Auth()
+  @Delete(':id')
+  @Version(VERSION_ONE)
+  async deleteNotification(@ReqUser() user: TUser, @Param('id') id: number) {
+    const data = await this.notificationService.deleteNotification(user, id);
+    return { data, message: RESPONSE.SUCCESS };
+  }
+
+  @Auth()
+  @Get()
+  @Version(VERSION_ONE)
+  async getNotifications(@ReqUser() user: TUser) {
+    const data = await this.notificationService.getNotifications(user);
     return { data, message: RESPONSE.SUCCESS };
   }
 }

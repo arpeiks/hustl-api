@@ -11,6 +11,9 @@ import { ServiceModule } from '../service/service.module';
 import { CurrencyModule } from '../currency/currency.module';
 import { SubscriptionModule } from '../subscription/subscription.module';
 import { NotificationModule } from '../notification/notification.module';
+import { OrderModule } from '../order/order.module';
+import { ProductModule } from '../product/product.module';
+import { CatalogModule } from '../catalog/catalog.module';
 
 @Module({
   providers: [AppService],
@@ -24,6 +27,9 @@ import { NotificationModule } from '../notification/notification.module';
     CurrencyModule,
     SubscriptionModule,
     NotificationModule,
+    OrderModule,
+    ProductModule,
+    CatalogModule,
     ConfigModule.forRoot({ load: [config], isGlobal: true }),
   ],
 })

@@ -1,9 +1,9 @@
 import * as Dto from './dto';
 import { DATABASE } from '@/consts';
 import { TDatabase } from '@/types';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { Injectable, Inject, NotFoundException } from '@nestjs/common';
-import { NotificationSetting, TUser } from '../drizzle/schema';
+import { NotificationSetting, Notification, TUser } from '../drizzle/schema';
 
 @Injectable()
 export class NotificationService {
@@ -26,5 +26,25 @@ export class NotificationService {
       .returning();
 
     return updatedSettings;
+  }
+
+  async getNotifications(user: TUser) {
+    return await this.db.query.Notification.findMany({
+      offset: 0,
+      limit: 200,
+      orderBy: desc(Notification.createdAt),
+      where: and(eq(Notification.userId, user.id)),
+    });
+  }
+
+  async deleteNotification(user: TUser, notificationId: number) {
+    const notification = await this.db.query.Notification.findFirst({
+      where: and(eq(Notification.id, notificationId), eq(Notification.userId, user.id)),
+    });
+
+    if (!notification) throw new NotFoundException('notification not found');
+
+    await this.db.delete(Notification).where(eq(Notification.id, notificationId));
+    return {};
   }
 }
