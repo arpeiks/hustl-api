@@ -146,6 +146,35 @@ export class AuthService {
     return {};
   }
 
+  async HandleVerifyPasswordResetCode(body: Dto.VerifyPasswordResetCodeBody) {
+    const user = await this.provider.query.User.findFirst({
+      where: or(eq(User.email, body.identifier), eq(User.phone, body.identifier)),
+    });
+
+    if (!user?.id) throw new UnauthorizedException('invalid or expired verification code');
+
+    const isEmail = body.identifier.includes('@');
+    const isPhone = !isEmail;
+
+    if (isEmail && !user.emailVerifiedAt) throw new UnprocessableEntityException();
+    if (isPhone && !user.phoneVerifiedAt) throw new UnprocessableEntityException();
+
+    const otpType = isEmail ? 'EMAIL_PASSWORD_RESET' : 'PHONE_PASSWORD_RESET';
+
+    const otp = await this.provider.query.Otp.findFirst({
+      where: and(
+        eq(Otp.type, otpType),
+        eq(Otp.code, body.code),
+        gte(Otp.expiredAt, new Date()),
+        eq(Otp.identifier, body.identifier),
+      ),
+    });
+
+    if (!otp?.id) throw new UnauthorizedException('invalid or expired verification code');
+
+    return {};
+  }
+
   async HandleSendPasswordResetCode(body: Dto.SendPasswordResetCodeBody) {
     const user = await this.provider.query.User.findFirst({
       where: or(eq(User.email, body.identifier), eq(User.phone, body.identifier)),

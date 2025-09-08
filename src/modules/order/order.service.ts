@@ -2,7 +2,7 @@ import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 import { DATABASE } from '@/consts';
 import { TDatabase } from '@/types';
 import { generatePagination, getPage } from '@/utils';
-import { Order, OrderItem, Cart, CartItem } from '../drizzle/schema';
+import { Order, OrderItem, Cart, CartItem, TUser } from '../drizzle/schema';
 import { eq, and, desc, count, ilike } from 'drizzle-orm';
 import * as Dto from './dto';
 
@@ -17,7 +17,7 @@ export class OrderService {
         items: {
           with: {
             product: {
-              with: { currency: true },
+              with: { currency: true, store: true },
             },
             productSize: true,
           },
@@ -57,7 +57,7 @@ export class OrderService {
       .values({
         orderNumber,
         buyerId: userId,
-        vendorId: cart.items[0].product.vendorId,
+        storeId: cart.items[0].product.storeId,
         status: 'pending',
         paymentStatus: 'pending',
         paymentMethod: body.paymentMethod,
@@ -101,7 +101,7 @@ export class OrderService {
       orderBy: desc(Order.createdAt),
       with: {
         buyer: true,
-        vendor: true,
+        store: true,
         currency: true,
         orderItems: {
           with: {
@@ -127,7 +127,7 @@ export class OrderService {
       where: eq(Order.id, orderId),
       with: {
         buyer: true,
-        vendor: true,
+        store: true,
         currency: true,
         orderItems: {
           with: {
@@ -164,7 +164,7 @@ export class OrderService {
       offset,
       orderBy: desc(Order.createdAt),
       with: {
-        vendor: true,
+        store: true,
         currency: true,
         orderItems: {
           with: {
@@ -185,15 +185,16 @@ export class OrderService {
     return { data, pagination };
   }
 
-  async getVendorOrders(userId: number, query: Dto.GetOrderQuery) {
+  async getStoreOrders(user: TUser, query: Dto.GetOrderQuery) {
+    const storeId = user.store?.id;
     const { limit, offset } = getPage(query);
+    const storeFilter = storeId ? eq(Order.storeId, storeId) : undefined;
     const statusFilter = query.status ? eq(Order.status, query.status) : undefined;
-    const vendorFilter = eq(Order.vendorId, userId);
 
     const [stats] = await this.db
       .select({ count: count(Order.id) })
       .from(Order)
-      .where(and(vendorFilter, statusFilter));
+      .where(and(storeFilter, statusFilter));
 
     const data = await this.db.query.Order.findMany({
       limit,
@@ -213,7 +214,7 @@ export class OrderService {
           },
         },
       },
-      where: and(vendorFilter, statusFilter),
+      where: and(storeFilter, statusFilter),
     });
 
     const total = stats.count || 0;
@@ -238,13 +239,14 @@ export class OrderService {
   async cancelOrder(orderId: number, userId: number) {
     const order = await this.db.query.Order.findFirst({
       where: eq(Order.id, orderId),
+      with: { store: true },
     });
 
     if (!order) {
       throw new NotFoundException('Order not found');
     }
 
-    if (order.buyerId !== userId && order.vendorId !== userId) {
+    if (order.buyerId !== userId && order.store.ownerId !== userId) {
       throw new Error('Unauthorized to cancel this order');
     }
 

@@ -22,13 +22,15 @@ import { MultiImageInterceptor } from '@/interceptors/file.interceptor';
 
 @Controller('product')
 export class ProductController {
-  constructor(private readonly productService: ProductService) {}
+  constructor(
+    private readonly productService: ProductService,
+  ) {}
 
   @Auth()
-  @Get('vendor')
+  @Get('store')
   @Version(VERSION_ONE)
-  async getVendorProducts(@ReqUser() user: TUser, @Query() query: Dto.GetProductsQuery) {
-    const data = await this.productService.getVendorProducts(user, query);
+  async getStoreProducts(@ReqUser() user: TUser, @Query() query: Dto.GetProductsQuery) {
+    const data = await this.productService.getStoreProducts(user, query);
     return { data, message: RESPONSE.SUCCESS };
   }
 

@@ -25,9 +25,12 @@ export class ProductService {
     private readonly cloudinaryService: CloudinaryService,
   ) {}
 
-  async createProduct(vendor: TUser, body: Dto.CreateProductBody, files?: Express.Multer.File[]) {
+  async createProduct(user: TUser, body: Dto.CreateProductBody, files?: Express.Multer.File[]) {
+    const storeId = user.store?.id;
     let images: string[] | undefined;
-    const sku = this.generateSKU(vendor.id, body.name);
+    if (!storeId) throw new NotFoundException('store not found');
+    
+    const sku = this.generateSKU(storeId, body.name);
 
     if (body.brandId) {
       const brand = await this.db.query.Brand.findFirst({ where: eq(Brand.id, body.brandId) });
@@ -56,7 +59,7 @@ export class ProductService {
     const stockQuantity = body?.stockQuantity || 1;
     const [product] = await this.db
       .insert(Product)
-      .values({ ...body, isFeatured: !!body.isFeatured, stockQuantity, sku, vendorId: vendor.id, images })
+      .values({ ...body, isFeatured: !!body.isFeatured, stockQuantity, sku, storeId, images })
       .returning();
 
     return await this.getProductById(product.id);
@@ -67,7 +70,7 @@ export class ProductService {
     const q = query.q ? `%${query.q}%` : undefined;
     const notDeletedFilter = isNull(Product.deletedAt);
     const brandFilter = query.brandId ? eq(Product.brandId, query.brandId) : undefined;
-    const vendorFilter = query.vendorId ? eq(Product.vendorId, query.vendorId) : undefined;
+    const storeFilter = query.storeId ? eq(Product.storeId, query.storeId) : undefined;
     const categoryFilter = query.categoryId ? eq(Product.categoryId, query.categoryId) : undefined;
     const queryFilter = q ? or(ilike(Product.name, q), ilike(Product.description || '', q)) : undefined;
     const activeFilter = query.isActive !== undefined ? eq(Product.isActive, !!query.isActive) : undefined;
@@ -77,25 +80,17 @@ export class ProductService {
       .select({ count: count(Product.id) })
       .from(Product)
       .where(
-        and(categoryFilter, brandFilter, vendorFilter, featuredFilter, activeFilter, queryFilter, notDeletedFilter),
+        and(categoryFilter, brandFilter, storeFilter, featuredFilter, activeFilter, queryFilter, notDeletedFilter),
       );
 
     const data = await this.db.query.Product.findMany({
       limit,
       offset,
       orderBy: desc(Product.createdAt),
-      where: and(
-        categoryFilter,
-        brandFilter,
-        vendorFilter,
-        featuredFilter,
-        activeFilter,
-        queryFilter,
-        notDeletedFilter,
-      ),
+      where: and(categoryFilter, brandFilter, storeFilter, featuredFilter, activeFilter, queryFilter, notDeletedFilter),
       with: {
         brand: true,
-        vendor: true,
+        store: true,
         category: true,
         currency: true,
         productReviews: true,
@@ -113,7 +108,7 @@ export class ProductService {
       where: and(eq(Product.id, productId), isNull(Product.deletedAt)),
       with: {
         brand: true,
-        vendor: true,
+        store: true,
         category: true,
         currency: true,
         productSizes: { with: { size: true } },
@@ -126,9 +121,12 @@ export class ProductService {
     return product;
   }
 
-  async updateProduct(vendor: TUser, productId: number, body: Dto.UpdateProductBody, files?: Express.Multer.File[]) {
+  async updateProduct(user: TUser, productId: number, body: Dto.UpdateProductBody, files?: Express.Multer.File[]) {
+    const storeId = user.store?.id;
+    if (!storeId) throw new NotFoundException('store not found');
+
     const product = await this.db.query.Product.findFirst({
-      where: and(eq(Product.id, productId), eq(Product.vendorId, vendor.id), isNull(Product.deletedAt)),
+      where: and(eq(Product.id, productId), eq(Product.storeId, storeId), isNull(Product.deletedAt)),
     });
 
     if (!product) throw new NotFoundException('product not found');
@@ -175,9 +173,12 @@ export class ProductService {
     return await this.getProductById(updatedProduct.id);
   }
 
-  async createProductSize(vendor: TUser, body: Dto.CreateProductSizeBody) {
+  async createProductSize(user: TUser, body: Dto.CreateProductSizeBody) {
+    const storeId = user.store?.id;
+    if (!storeId) throw new NotFoundException('store not found');
+
     const product = await this.db.query.Product.findFirst({
-      where: and(eq(Product.id, body.productId), eq(Product.vendorId, vendor.id), isNull(Product.deletedAt)),
+      where: and(eq(Product.id, body.productId), eq(Product.storeId, storeId), isNull(Product.deletedAt)),
     });
 
     if (!product) throw new NotFoundException('product not found');
@@ -193,9 +194,12 @@ export class ProductService {
     return productSize;
   }
 
-  async deleteProduct(vendor: TUser, productId: number) {
+    async deleteProduct(user: TUser, productId: number) {
+    const storeId = user.store?.id;
+    if (!storeId) throw new NotFoundException('store not found');
+    
     const product = await this.db.query.Product.findFirst({
-      where: and(eq(Product.id, productId), eq(Product.vendorId, vendor.id), isNull(Product.deletedAt)),
+      where: and(eq(Product.id, productId), eq(Product.storeId, storeId), isNull(Product.deletedAt)),
     });
 
     if (!product) throw new NotFoundException('product not found');
@@ -230,10 +234,11 @@ export class ProductService {
     return review;
   }
 
-  async getVendorProducts(vendor: TUser, query: Dto.GetProductsQuery) {
+  async getStoreProducts(user: TUser, query: Dto.GetProductsQuery) {
+    const storeId = user.store?.id;
     const { limit, offset } = getPage(query);
     const q = query.q ? `%${query.q}%` : undefined;
-    const vendorFilter = eq(Product.vendorId, vendor.id);
+    const storeFilter = storeId ? eq(Product.storeId, storeId) : undefined;
     const brandFilter = query.brandId ? eq(Product.brandId, query.brandId) : undefined;
     const categoryFilter = query.categoryId ? eq(Product.categoryId, query.categoryId) : undefined;
     const queryFilter = q ? or(ilike(Product.name, q), ilike(Product.description || '', q)) : undefined;
@@ -245,22 +250,14 @@ export class ProductService {
       .select({ count: count(Product.id) })
       .from(Product)
       .where(
-        and(vendorFilter, categoryFilter, brandFilter, featuredFilter, activeFilter, queryFilter, notDeletedFilter),
+        and(storeFilter, categoryFilter, brandFilter, featuredFilter, activeFilter, queryFilter, notDeletedFilter),
       );
 
     const data = await this.db.query.Product.findMany({
       limit,
       offset,
       orderBy: desc(Product.createdAt),
-      where: and(
-        vendorFilter,
-        categoryFilter,
-        brandFilter,
-        featuredFilter,
-        activeFilter,
-        queryFilter,
-        notDeletedFilter,
-      ),
+      where: and(storeFilter, categoryFilter, brandFilter, featuredFilter, activeFilter, queryFilter, notDeletedFilter),
       with: {
         brand: true,
         category: true,
@@ -275,14 +272,14 @@ export class ProductService {
     return { data, pagination };
   }
 
-  private generateSKU(vendorId: number, productName: string): string {
+  private generateSKU(storeId: number, productName: string): string {
     const timestamp = Date.now().toString().slice(-6);
-    const vendorPrefix = vendorId.toString().padStart(3, '0');
+    const storePrefix = storeId.toString().padStart(3, '0');
     const namePrefix = productName
       .toUpperCase()
       .replace(/[^A-Z0-9]/g, '')
       .slice(0, 3);
 
-    return `${vendorPrefix}-${namePrefix}-${timestamp}`;
+    return `${storePrefix}-${namePrefix}-${timestamp}`;
   }
 }

@@ -13,6 +13,13 @@ export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
   @Version(VERSION_ONE)
+  @Post('/password/reset/code/verify')
+  async HandleVerifyPasswordResetCode(@Body() body: Dto.VerifyPasswordResetCodeBody) {
+    const data = await this.auth.HandleVerifyPasswordResetCode(body);
+    return { data, message: RESPONSE.SUCCESS };
+  }
+
+  @Version(VERSION_ONE)
   @Post('/password/reset/code')
   async HandleSendPasswordResetCode(@Body() body: Dto.SendPasswordResetCodeBody) {
     const data = await this.auth.HandleSendPasswordResetCode(body);

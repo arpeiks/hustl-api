@@ -85,10 +85,10 @@ export type TProductSize = typeof ProductSize.$inferSelect;
 export type TSubscription = typeof Subscription.$inferSelect;
 export type TNotification = typeof Notification.$inferSelect;
 export type TProductReview = typeof ProductReview.$inferSelect;
-export type TUser = typeof User.$inferSelect & { auth?: TAuth };
 export type TSubscriptionPlan = typeof SubscriptionPlan.$inferSelect;
 export type TSubscriptionFeature = typeof SubscriptionFeature.$inferSelect;
 export type TNotificationSetting = typeof NotificationSetting.$inferSelect;
+export type TUser = typeof User.$inferSelect & { auth?: TAuth; store?: TStore };
 export type TSubscriptionPlanFeature = typeof SubscriptionPlanFeature.$inferSelect;
 
 export const User = hustlSchema.table('user', {
@@ -287,8 +287,8 @@ export const Product = hustlSchema.table('product', {
     .notNull(),
   brandId: integer().references(() => Brand.id),
   categoryId: integer().references(() => Category.id),
-  vendorId: integer()
-    .references(() => User.id)
+  storeId: integer()
+    .references(() => Store.id)
     .notNull(),
   images: text().array(),
   isActive: boolean().default(true),
@@ -330,8 +330,8 @@ export const Order = hustlSchema.table('order', {
   buyerId: integer()
     .references(() => User.id)
     .notNull(),
-  vendorId: integer()
-    .references(() => User.id)
+  storeId: integer()
+    .references(() => Store.id)
     .notNull(),
   status: OrderStatusEnum().default('pending'),
   paymentStatus: PaymentStatusEnum().default('pending'),
@@ -370,14 +370,12 @@ export const UserRelations = relations(User, ({ one, many }) => ({
   cart: one(Cart),
   store: one(Store),
   wallets: many(Wallet),
-  products: many(Product),
   services: many(UserService),
   subscriptions: many(Subscription),
   notifications: many(Notification),
   productReviews: many(ProductReview),
   notificationSetting: one(NotificationSetting),
   ordersAsBuyer: many(Order, { relationName: 'buyer' }),
-  ordersAsVendor: many(Order, { relationName: 'vendor' }),
 }));
 
 export const AuthRelations = relations(Auth, ({ one }) => ({
@@ -457,8 +455,7 @@ export const ProductRelations = relations(Product, ({ many, one }) => ({
   productSizes: many(ProductSize),
   productReviews: many(ProductReview),
   brand: one(Brand, { fields: [Product.brandId], references: [Brand.id] }),
-  vendor: one(User, { fields: [Product.vendorId], references: [User.id] }),
-  store: one(Store, { fields: [Product.vendorId], references: [Store.ownerId] }),
+  store: one(Store, { fields: [Product.storeId], references: [Store.id] }),
   category: one(Category, { fields: [Product.categoryId], references: [Category.id] }),
   currency: one(Currency, { fields: [Product.currencyId], references: [Currency.id] }),
 }));
@@ -478,7 +475,7 @@ export const OrderRelations = relations(Order, ({ many, one }) => ({
   orderItems: many(OrderItem),
   currency: one(Currency, { fields: [Order.currencyId], references: [Currency.id] }),
   buyer: one(User, { fields: [Order.buyerId], references: [User.id], relationName: 'buyer' }),
-  vendor: one(User, { fields: [Order.vendorId], references: [User.id], relationName: 'vendor' }),
+  store: one(Store, { fields: [Order.storeId], references: [Store.id] }),
 }));
 
 export const OrderItemRelations = relations(OrderItem, ({ one }) => ({
@@ -529,6 +526,7 @@ export const CartItem = hustlSchema.table('cart_item', {
 });
 
 export const StoreRelations = relations(Store, ({ one, many }) => ({
+  orders: many(Order),
   owner: one(User, { fields: [Store.ownerId], references: [User.id] }),
   products: many(Product),
 }));

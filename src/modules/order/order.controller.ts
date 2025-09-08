@@ -1,14 +1,17 @@
-import { Get, Put, Post, Body, Query, Param, Version, Controller } from '@nestjs/common';
 import * as Dto from './dto';
 import { RESPONSE } from '@/response';
 import { VERSION_ONE } from '@/consts';
+import { TUser } from '../drizzle/schema';
 import { OrderService } from './order.service';
 import { Auth } from '@/modules/auth/decorators/auth.decorator';
 import { ReqUser } from '@/modules/auth/decorators/user.decorator';
+import { Get, Put, Post, Body, Query, Param, Version, Controller } from '@nestjs/common';
 
 @Controller('order')
 export class OrderController {
-  constructor(private readonly orderService: OrderService) {}
+  constructor(
+    private readonly orderService: OrderService,
+  ) {}
 
   @Auth()
   @Post()
@@ -35,10 +38,10 @@ export class OrderController {
   }
 
   @Auth()
-  @Get('vendor/orders')
+  @Get('store/orders')
   @Version(VERSION_ONE)
-  async getVendorOrders(@ReqUser('id') userId: number, @Query() query: Dto.GetOrderQuery) {
-    const data = await this.orderService.getVendorOrders(userId, query);
+  async getStoreOrders(@ReqUser() user: TUser, @Query() query: Dto.GetOrderQuery) {
+    const data = await this.orderService.getStoreOrders(user, query);
     return { data, message: RESPONSE.SUCCESS };
   }
 

@@ -134,7 +134,7 @@ export class GetProductsQuery {
 
   @IsInt()
   @IsOptional()
-  vendorId: number;
+  storeId: number;
 
   @IsInt()
   @IsOptional()

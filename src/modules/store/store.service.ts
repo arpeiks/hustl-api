@@ -1,29 +1,23 @@
-import { Injectable, Inject, NotFoundException } from '@nestjs/common';
+import * as Dto from './dto';
 import { DATABASE } from '@/consts';
 import { TDatabase } from '@/types';
-import { generatePagination, getPage } from '@/utils';
 import { Store } from '../drizzle/schema';
+import { generatePagination, getPage } from '@/utils';
 import { eq, and, desc, count, or, ilike } from 'drizzle-orm';
-import * as Dto from './dto';
+import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 
 @Injectable()
 export class StoreService {
   constructor(@Inject(DATABASE) private readonly db: TDatabase) {}
 
   async createStore(ownerId: number, body: Dto.CreateStoreBody) {
-    const existingStore = await this.db.query.Store.findFirst({
-      where: eq(Store.ownerId, ownerId),
-    });
-
-    if (existingStore) {
-      throw new Error('User already has a store');
-    }
+    const existingStore = await this.db.query.Store.findFirst({ where: eq(Store.ownerId, ownerId) });
+    if (existingStore) return existingStore;
 
     const [store] = await this.db
       .insert(Store)
       .values({ ...body, ownerId })
       .returning();
-
     return store;
   }
 

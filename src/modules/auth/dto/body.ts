@@ -65,6 +65,16 @@ export class SendEmailVerificationCodeBody {
   email: string;
 }
 
+export class VerifyPasswordResetCodeBody {
+  @IsString()
+  @IsNotEmpty()
+  identifier: string;
+
+  @IsString()
+  @IsNotEmpty()
+  code: string;
+}
+
 export class SendPasswordResetCodeBody {
   @IsString()
   @IsNotEmpty()
