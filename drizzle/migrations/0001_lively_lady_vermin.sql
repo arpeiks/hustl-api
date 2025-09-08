@@ -1,1 +1,0 @@
-ALTER TABLE "hustl"."store" DROP COLUMN "business_hours";
