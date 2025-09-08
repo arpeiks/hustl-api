@@ -9,31 +9,25 @@ import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 export class CartService {
   constructor(@Inject(DATABASE) private readonly db: TDatabase) {}
 
-  async getOrCreateCart(userId: number) {
-    let cart = await this.db.query.Cart.findFirst({
-      where: eq(Cart.userId, userId),
+  async getCart(user: TUser) {
+    const cart = await this.db.query.Cart.findFirst({
+      where: eq(Cart.userId, user.id),
       with: {
-        items: { with: { product: { with: { productSizes: true, brand: true, category: true, currency: true } } } },
+        items: {
+          with: {
+            productSize: true,
+            product: { with: { productSizes: true, brand: true, category: true, currency: true } },
+          },
+        },
       },
     });
 
-    if (!cart) {
-      const [newCart] = await this.db.insert(Cart).values({ userId }).returning();
-      cart = await this.db.query.Cart.findFirst({
-        where: eq(Cart.id, newCart.id),
-        with: {
-          items: { with: { product: { with: { productSizes: true, brand: true, category: true, currency: true } } } },
-        },
-      });
-    }
-
-    if (!cart) throw new Error('failed to create cart');
-
+    if (!cart) throw new NotFoundException('cart not found');
     return cart;
   }
 
-  async addToCart(user: TUser, body: Dto.AddToCartBody) {
-    const cart = await this.getOrCreateCart(user.id);
+  async HandleAddToCart(user: TUser, body: Dto.AddToCartBody) {
+    const cart = await this.getCart(user);
 
     const existingItem = await this.db.query.CartItem.findFirst({
       where: and(
@@ -70,8 +64,8 @@ export class CartService {
     return newItem;
   }
 
-  async updateCartItem(userId: number, itemId: number, body: Dto.UpdateCartItemBody) {
-    const cart = await this.getOrCreateCart(userId);
+  async HandleUpdateCartItem(user: TUser, itemId: number, body: Dto.UpdateCartItemBody) {
+    const cart = await this.getCart(user);
 
     const [updatedItem] = await this.db
       .update(CartItem)
@@ -79,30 +73,23 @@ export class CartService {
       .where(and(eq(CartItem.id, itemId), eq(CartItem.cartId, cart.id)))
       .returning();
 
-    if (!updatedItem) {
-      throw new NotFoundException('Cart item not found');
-    }
-
+    if (!updatedItem) return;
     return updatedItem;
   }
 
-  async removeFromCart(userId: number, itemId: number) {
-    const cart = await this.getOrCreateCart(userId);
-
+  async HandleRemoveFromCart(user: TUser, itemId: number) {
+    const cart = await this.getCart(user);
     await this.db.delete(CartItem).where(and(eq(CartItem.id, itemId), eq(CartItem.cartId, cart.id)));
-
-    return { success: true };
+    return {};
   }
 
-  async clearCart(userId: number) {
-    const cart = await this.getOrCreateCart(userId);
-
+  async HandleClearCart(user: TUser) {
+    const cart = await this.getCart(user);
     await this.db.delete(CartItem).where(eq(CartItem.cartId, cart.id));
-
-    return { success: true };
+    return {};
   }
 
-  async getCart(userId: number) {
-    return await this.getOrCreateCart(userId);
+  async HandleGetCart(user: TUser) {
+    return await this.getCart(user);
   }
 }

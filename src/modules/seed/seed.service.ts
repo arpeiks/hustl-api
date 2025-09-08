@@ -1,7 +1,7 @@
 import { go } from '@/utils';
+import { eq } from 'drizzle-orm';
 import { DATABASE } from '@/consts';
 import { TDatabase } from '@/types';
-import { eq, and } from 'drizzle-orm';
 import { ArgonService } from '../../services/argon.service';
 import { Injectable, Inject, OnModuleInit } from '@nestjs/common';
 import { Currency, Brand, Category, Size, Product, ProductSize, Store, User, Auth } from '../drizzle/schema';
@@ -80,16 +80,14 @@ export class SeedService implements OnModuleInit {
       ];
 
       for (const brand of brands) {
-        const existingBrand = await this.db.query.Brand.findFirst({
-          where: eq(Brand.name, brand.name),
-        });
-
-        if (!existingBrand) {
-          await this.db.insert(Brand).values(brand);
-          console.log(`✅ Created brand: ${brand.name}`);
-        } else {
-          console.log(`⏭️  Brand already exists: ${brand.name}`);
-        }
+        await this.db
+          .insert(Brand)
+          .values(brand)
+          .onConflictDoUpdate({
+            target: [Brand.name],
+            set: { ...brand, updatedAt: new Date() },
+          });
+        console.log(`✅ Upserted brand: ${brand.name}`);
       }
     });
 
@@ -130,18 +128,16 @@ export class SeedService implements OnModuleInit {
       const categoryMap = new Map<string, number>();
 
       for (const category of categories) {
-        const existingCategory = await this.db.query.Category.findFirst({
-          where: eq(Category.name, category.name),
-        });
-
-        if (!existingCategory) {
-          const [newCategory] = await this.db.insert(Category).values(category).returning();
-          categoryMap.set(category.name, newCategory.id);
-          console.log(`✅ Created category: ${category.name}`);
-        } else {
-          categoryMap.set(category.name, existingCategory.id);
-          console.log(`⏭️  Category already exists: ${category.name}`);
-        }
+        const [upsertedCategory] = await this.db
+          .insert(Category)
+          .values(category)
+          .onConflictDoUpdate({
+            target: [Category.name],
+            set: { ...category, updatedAt: new Date() },
+          })
+          .returning();
+        categoryMap.set(category.name, upsertedCategory.id);
+        console.log(`✅ Upserted category: ${category.name}`);
       }
 
       const parentRelationships = [
@@ -266,20 +262,18 @@ export class SeedService implements OnModuleInit {
         });
 
         if (category) {
-          const existingSize = await this.db.query.Size.findFirst({
-            where: and(eq(Size.name, size.name), eq(Size.value, size.value), eq(Size.categoryId, category.id)),
-          });
-
-          if (!existingSize) {
-            await this.db.insert(Size).values({
+          await this.db
+            .insert(Size)
+            .values({
               name: size.name,
               value: size.value,
               categoryId: category.id,
+            })
+            .onConflictDoUpdate({
+              target: [Size.name, Size.value, Size.categoryId],
+              set: { updatedAt: new Date() },
             });
-            console.log(`✅ Created size: ${size.name} - ${size.value} for ${size.categoryName}`);
-          } else {
-            console.log(`⏭️  Size already exists: ${size.name} - ${size.value} for ${size.categoryName}`);
-          }
+          console.log(`✅ Upserted size: ${size.name} - ${size.value} for ${size.categoryName}`);
         }
       }
     });
@@ -346,23 +340,28 @@ export class SeedService implements OnModuleInit {
       ];
 
       for (const userData of users) {
-        const existingUser = await this.db.query.User.findFirst({
-          where: eq(User.email, userData.email),
-        });
+        const [user] = await this.db
+          .insert(User)
+          .values(userData)
+          .onConflictDoUpdate({
+            target: [User.email],
+            set: { ...userData, updatedAt: new Date() },
+          })
+          .returning();
 
-        if (!existingUser) {
-          const [user] = await this.db.insert(User).values(userData).returning();
-
-          const hashedPassword = await this.argonService.hash('password123');
-          await this.db.insert(Auth).values({
+        const hashedPassword = await this.argonService.hash('password123');
+        await this.db
+          .insert(Auth)
+          .values({
             userId: user.id,
             password: hashedPassword,
+          })
+          .onConflictDoUpdate({
+            target: [Auth.userId],
+            set: { password: hashedPassword, updatedAt: new Date() },
           });
 
-          console.log(`✅ Created user: ${userData.fullName}`);
-        } else {
-          console.log(`⏭️  User already exists: ${userData.fullName}`);
-        }
+        console.log(`✅ Upserted user: ${userData.fullName}`);
       }
     });
 
@@ -455,19 +454,17 @@ export class SeedService implements OnModuleInit {
         const storeData = stores[i];
         const owner = artisanUsers[i];
 
-        const existingStore = await this.db.query.Store.findFirst({
-          where: eq(Store.name, storeData.name),
-        });
-
-        if (!existingStore) {
-          await this.db.insert(Store).values({
+        await this.db
+          .insert(Store)
+          .values({
             ...storeData,
             ownerId: owner.id,
+          })
+          .onConflictDoUpdate({
+            target: [Store.name],
+            set: { ...storeData, ownerId: owner.id, updatedAt: new Date() },
           });
-          console.log(`✅ Created store: ${storeData.name}`);
-        } else {
-          console.log(`⏭️  Store already exists: ${storeData.name}`);
-        }
+        console.log(`✅ Upserted store: ${storeData.name}`);
       }
     });
 
@@ -503,8 +500,8 @@ export class SeedService implements OnModuleInit {
           categoryName: 'Footwear',
           storeName: 'TechHub Electronics',
           images: [
-            'https://res.cloudinary.com/example/nike-air-max-270-1.jpg',
-            'https://res.cloudinary.com/example/nike-air-max-270-2.jpg',
+            'https://res.cloudinary.com/arpeiks/image/upload/v1757356104/product-images/1_1_%281%29-108015076842.png',
+            'https://res.cloudinary.com/arpeiks/image/upload/v1757356104/product-images/1_1_%281%29-108015076842.png',
           ],
           stockQuantity: 50,
           isFeatured: true,
@@ -523,8 +520,8 @@ export class SeedService implements OnModuleInit {
           categoryName: 'Smartphones',
           storeName: 'TechHub Electronics',
           images: [
-            'https://res.cloudinary.com/example/iphone-15-pro-1.jpg',
-            'https://res.cloudinary.com/example/iphone-15-pro-2.jpg',
+            'https://res.cloudinary.com/arpeiks/image/upload/v1757356104/product-images/1_1_%281%29-108015076842.png',
+            'https://res.cloudinary.com/arpeiks/image/upload/v1757356104/product-images/1_1_%281%29-108015076842.png',
           ],
           stockQuantity: 25,
           isFeatured: true,
@@ -543,8 +540,8 @@ export class SeedService implements OnModuleInit {
           categoryName: 'Smartphones',
           storeName: 'TechHub Electronics',
           images: [
-            'https://res.cloudinary.com/example/galaxy-s24-ultra-1.jpg',
-            'https://res.cloudinary.com/example/galaxy-s24-ultra-2.jpg',
+            'https://res.cloudinary.com/arpeiks/image/upload/v1757356104/product-images/1_1_%281%29-108015076842.png',
+            'https://res.cloudinary.com/arpeiks/image/upload/v1757356104/product-images/1_1_%281%29-108015076842.png',
           ],
           stockQuantity: 30,
           isFeatured: false,
@@ -563,8 +560,8 @@ export class SeedService implements OnModuleInit {
           categoryName: 'Laptops',
           storeName: 'TechHub Electronics',
           images: [
-            'https://res.cloudinary.com/example/macbook-pro-m3-1.jpg',
-            'https://res.cloudinary.com/example/macbook-pro-m3-2.jpg',
+            'https://res.cloudinary.com/arpeiks/image/upload/v1757356104/product-images/1_1_%281%29-108015076842.png',
+            'https://res.cloudinary.com/arpeiks/image/upload/v1757356104/product-images/1_1_%281%29-108015076842.png',
           ],
           stockQuantity: 15,
           isFeatured: true,
@@ -582,8 +579,8 @@ export class SeedService implements OnModuleInit {
           categoryName: "Men's Clothing",
           storeName: 'Fashion Forward',
           images: [
-            'https://res.cloudinary.com/example/nike-tee-classic-1.jpg',
-            'https://res.cloudinary.com/example/nike-tee-classic-2.jpg',
+            'https://res.cloudinary.com/arpeiks/image/upload/v1757356104/product-images/1_1_%281%29-108015076842.png',
+            'https://res.cloudinary.com/arpeiks/image/upload/v1757356104/product-images/1_1_%281%29-108015076842.png',
           ],
           stockQuantity: 100,
           isFeatured: false,
@@ -603,8 +600,8 @@ export class SeedService implements OnModuleInit {
           categoryName: 'Accessories',
           storeName: 'Fashion Forward',
           images: [
-            'https://res.cloudinary.com/example/gucci-handbag-1.jpg',
-            'https://res.cloudinary.com/example/gucci-handbag-2.jpg',
+            'https://res.cloudinary.com/arpeiks/image/upload/v1757356104/product-images/1_1_%281%29-108015076842.png',
+            'https://res.cloudinary.com/arpeiks/image/upload/v1757356104/product-images/1_1_%281%29-108015076842.png',
           ],
           stockQuantity: 5,
           isFeatured: true,
@@ -619,8 +616,8 @@ export class SeedService implements OnModuleInit {
           categoryName: 'Accessories',
           storeName: 'Jewelry Craft Studio',
           images: [
-            'https://res.cloudinary.com/example/rolex-submariner-1.jpg',
-            'https://res.cloudinary.com/example/rolex-submariner-2.jpg',
+            'https://res.cloudinary.com/arpeiks/image/upload/v1757356104/product-images/1_1_%281%29-108015076842.png',
+            'https://res.cloudinary.com/arpeiks/image/upload/v1757356104/product-images/1_1_%281%29-108015076842.png',
           ],
           stockQuantity: 2,
           isFeatured: true,
@@ -638,8 +635,8 @@ export class SeedService implements OnModuleInit {
           categoryName: 'Living Room Furniture',
           storeName: 'Home & Garden Paradise',
           images: [
-            'https://res.cloudinary.com/example/ikea-klippan-1.jpg',
-            'https://res.cloudinary.com/example/ikea-klippan-2.jpg',
+            'https://res.cloudinary.com/arpeiks/image/upload/v1757356104/product-images/1_1_%281%29-108015076842.png',
+            'https://res.cloudinary.com/arpeiks/image/upload/v1757356104/product-images/1_1_%281%29-108015076842.png',
           ],
           stockQuantity: 20,
           isFeatured: false,
@@ -657,8 +654,8 @@ export class SeedService implements OnModuleInit {
           categoryName: 'Kitchen Appliances',
           storeName: 'Home & Garden Paradise',
           images: [
-            'https://res.cloudinary.com/example/kitchenaid-mixer-1.jpg',
-            'https://res.cloudinary.com/example/kitchenaid-mixer-2.jpg',
+            'https://res.cloudinary.com/arpeiks/image/upload/v1757356104/product-images/1_1_%281%29-108015076842.png',
+            'https://res.cloudinary.com/arpeiks/image/upload/v1757356104/product-images/1_1_%281%29-108015076842.png',
           ],
           stockQuantity: 12,
           isFeatured: true,
@@ -673,8 +670,8 @@ export class SeedService implements OnModuleInit {
           categoryName: 'Team Sports',
           storeName: 'Sports Central',
           images: [
-            'https://res.cloudinary.com/example/wilson-basketball-1.jpg',
-            'https://res.cloudinary.com/example/wilson-basketball-2.jpg',
+            'https://res.cloudinary.com/arpeiks/image/upload/v1757356104/product-images/1_1_%281%29-108015076842.png',
+            'https://res.cloudinary.com/arpeiks/image/upload/v1757356104/product-images/1_1_%281%29-108015076842.png',
           ],
           stockQuantity: 50,
           isFeatured: false,
@@ -695,15 +692,24 @@ export class SeedService implements OnModuleInit {
           continue;
         }
 
-        const existingProduct = await this.db.query.Product.findFirst({
-          where: eq(Product.sku, productData.sku),
-        });
-
-        if (!existingProduct) {
-          const [product] = await this.db
-            .insert(Product)
-            .values({
-              sku: productData.sku,
+        const [product] = await this.db
+          .insert(Product)
+          .values({
+            sku: productData.sku,
+            name: productData.name,
+            description: productData.description,
+            price: productData.price,
+            currencyId: ngnCurrency.id,
+            brandId: brand.id,
+            categoryId: category.id,
+            storeId: store.id,
+            images: productData.images,
+            stockQuantity: productData.stockQuantity,
+            isFeatured: productData.isFeatured,
+          })
+          .onConflictDoUpdate({
+            target: [Product.sku],
+            set: {
               name: productData.name,
               description: productData.description,
               price: productData.price,
@@ -714,25 +720,34 @@ export class SeedService implements OnModuleInit {
               images: productData.images,
               stockQuantity: productData.stockQuantity,
               isFeatured: productData.isFeatured,
-            })
-            .returning();
+              updatedAt: new Date(),
+            },
+          })
+          .returning();
 
-          for (const sizeData of productData.sizes) {
-            const size = sizes.find((s) => s.name === sizeData.sizeName && s.value === sizeData.sizeValue);
-            if (size) {
-              await this.db.insert(ProductSize).values({
+        for (const sizeData of productData.sizes) {
+          const size = sizes.find((s) => s.name === sizeData.sizeName && s.value === sizeData.sizeValue);
+          if (size) {
+            await this.db
+              .insert(ProductSize)
+              .values({
                 productId: product.id,
                 sizeId: size.id,
                 price: sizeData.price,
                 stockQuantity: sizeData.stock,
+              })
+              .onConflictDoUpdate({
+                target: [ProductSize.productId, ProductSize.sizeId],
+                set: {
+                  price: sizeData.price,
+                  stockQuantity: sizeData.stock,
+                  updatedAt: new Date(),
+                },
               });
-            }
           }
-
-          console.log(`✅ Created product: ${productData.name}`);
-        } else {
-          console.log(`⏭️  Product already exists: ${productData.name}`);
         }
+
+        console.log(`✅ Upserted product: ${productData.name}`);
       }
     });
 

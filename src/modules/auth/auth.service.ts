@@ -10,6 +10,7 @@ import {
   Otp,
   Auth,
   User,
+  Cart,
   Store,
   TUser,
   Wallet,
@@ -58,6 +59,7 @@ export class AuthService {
         .values({ fullName: body.phone, role: 'user', phone: body.phone, email: body.email })
         .returning();
 
+      await tx.insert(Cart).values({ userId: user.id });
       const token = this.token.generateAccessToken({ sub: user.id });
       await tx.insert(NotificationSetting).values({ userId: user.id });
       await tx.insert(Auth).values({ userId: user.id, token, password: hashedPassword });

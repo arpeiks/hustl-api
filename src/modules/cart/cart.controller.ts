@@ -12,47 +12,46 @@ export class CartController {
   constructor(private readonly cartService: CartService) {}
 
   @Auth()
-  @Post('add')
+  @Delete('item/:id')
   @Version(VERSION_ONE)
-  async addToCart(@ReqUser() user: TUser, @Body() body: Dto.AddToCartBody) {
-    const data = await this.cartService.addToCart(user, body);
-    return { data, message: RESPONSE.SUCCESS };
-  }
-
-  @Get()
-  @Auth()
-  @Version(VERSION_ONE)
-  async getCart(@ReqUser('id') userId: number) {
-    const data = await this.cartService.getCart(userId);
+  async HandleRemoveFromCart(@ReqUser() user: TUser, @Param('id') itemId: number) {
+    const data = await this.cartService.HandleRemoveFromCart(user, itemId);
     return { data, message: RESPONSE.SUCCESS };
   }
 
   @Auth()
   @Put('item/:id')
   @Version(VERSION_ONE)
-  async updateCartItem(
-    @ReqUser('id') userId: number,
+  async HandleUpdateCartItem(
+    @ReqUser() user: TUser,
     @Param('id') itemId: number,
     @Body() body: Dto.UpdateCartItemBody,
   ) {
-    const data = await this.cartService.updateCartItem(userId, itemId, body);
+    const data = await this.cartService.HandleUpdateCartItem(user, itemId, body);
     return { data, message: RESPONSE.SUCCESS };
   }
 
   @Auth()
-  @Delete('item/:id')
+  @Post('add')
   @Version(VERSION_ONE)
-  async removeFromCart(@ReqUser('id') userId: number, @Param('id') itemId: number) {
-    const data = await this.cartService.removeFromCart(userId, itemId);
+  async HandleAddToCart(@ReqUser() user: TUser, @Body() body: Dto.AddToCartBody) {
+    const data = await this.cartService.HandleAddToCart(user, body);
     return { data, message: RESPONSE.SUCCESS };
   }
 
   @Auth()
-  @Delete('clear')
+  @Delete()
   @Version(VERSION_ONE)
-  async clearCart(@ReqUser('id') userId: number) {
-    const data = await this.cartService.clearCart(userId);
+  async HandleClearCart(@ReqUser() user: TUser) {
+    const data = await this.cartService.HandleClearCart(user);
+    return { data, message: RESPONSE.SUCCESS };
+  }
+
+  @Get()
+  @Auth()
+  @Version(VERSION_ONE)
+  async HandleGetCart(@ReqUser() user: TUser) {
+    const data = await this.cartService.HandleGetCart(user);
     return { data, message: RESPONSE.SUCCESS };
   }
 }
-

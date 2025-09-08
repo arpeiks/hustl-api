@@ -156,7 +156,7 @@ export const Otp = hustlSchema.table('otp', {
 
 export const Service = hustlSchema.table('service_listing', {
   id: serial().primaryKey(),
-  name: varchar().notNull(),
+  name: varchar().notNull().unique(),
   description: text(),
   ...timestamps,
 });
@@ -196,17 +196,21 @@ export const SubscriptionFeature = hustlSchema.table('subscription_feature', {
   ...timestamps,
 });
 
-export const SubscriptionPlan = hustlSchema.table('subscription_plan', {
-  id: serial().primaryKey(),
-  name: varchar().notNull(),
-  description: text(),
-  price: integer().notNull(),
-  currency: integer().references(() => Currency.id),
-  intervalUnit: IntervalUnitEnum().notNull(),
-  intervalCount: integer().notNull().default(1),
-  isActive: boolean().default(true),
-  ...timestamps,
-});
+export const SubscriptionPlan = hustlSchema.table(
+  'subscription_plan',
+  {
+    id: serial().primaryKey(),
+    name: varchar().notNull(),
+    description: text(),
+    price: integer().notNull(),
+    currency: integer().references(() => Currency.id),
+    intervalUnit: IntervalUnitEnum().notNull(),
+    intervalCount: integer().notNull().default(1),
+    isActive: boolean().default(true),
+    ...timestamps,
+  },
+  (t) => [unique().on(t.name, t.currency)],
+);
 
 export const SubscriptionPlanFeature = hustlSchema.table(
   'subscription_plan_feature',
@@ -236,19 +240,23 @@ export const Subscription = hustlSchema.table('subscription', {
   ...timestamps,
 });
 
-export const Wallet = hustlSchema.table('wallet', {
-  id: serial().primaryKey(),
-  userId: integer()
-    .references(() => User.id)
-    .notNull(),
-  currencyId: integer()
-    .references(() => Currency.id)
-    .notNull(),
-  type: WalletTypeEnum().notNull().default('personal'),
-  balance: integer().notNull().default(0),
-  isActive: boolean().default(true),
-  ...timestamps,
-});
+export const Wallet = hustlSchema.table(
+  'wallet',
+  {
+    id: serial().primaryKey(),
+    userId: integer()
+      .references(() => User.id)
+      .notNull(),
+    currencyId: integer()
+      .references(() => Currency.id)
+      .notNull(),
+    type: WalletTypeEnum().notNull().default('personal'),
+    balance: integer().notNull().default(0),
+    isActive: boolean().default(true),
+    ...timestamps,
+  },
+  (t) => [unique().on(t.userId, t.currencyId, t.type)],
+);
 
 export const Brand = hustlSchema.table('brand', {
   id: serial().primaryKey(),
@@ -261,21 +269,25 @@ export const Brand = hustlSchema.table('brand', {
 
 export const Category = hustlSchema.table('category', {
   id: serial().primaryKey(),
-  name: varchar().notNull(),
+  name: varchar().notNull().unique(),
   description: text(),
   parentId: integer(),
   isActive: boolean().default(true),
   ...timestamps,
 });
 
-export const Size = hustlSchema.table('size', {
-  id: serial().primaryKey(),
-  name: varchar().notNull(),
-  value: varchar().notNull(),
-  categoryId: integer().references(() => Category.id),
-  isActive: boolean().default(true),
-  ...timestamps,
-});
+export const Size = hustlSchema.table(
+  'size',
+  {
+    id: serial().primaryKey(),
+    name: varchar().notNull(),
+    value: varchar().notNull(),
+    categoryId: integer().references(() => Category.id),
+    isActive: boolean().default(true),
+    ...timestamps,
+  },
+  (t) => [unique().on(t.name, t.value, t.categoryId)],
+);
 
 export const Product = hustlSchema.table('product', {
   id: serial().primaryKey(),
@@ -298,18 +310,22 @@ export const Product = hustlSchema.table('product', {
   ...timestamps,
 });
 
-export const ProductSize = hustlSchema.table('product_size', {
-  id: serial().primaryKey(),
-  productId: integer()
-    .references(() => Product.id)
-    .notNull(),
-  sizeId: integer()
-    .references(() => Size.id)
-    .notNull(),
-  price: integer().notNull(),
-  stockQuantity: integer().notNull().default(0),
-  ...timestamps,
-});
+export const ProductSize = hustlSchema.table(
+  'product_size',
+  {
+    id: serial().primaryKey(),
+    productId: integer()
+      .references(() => Product.id)
+      .notNull(),
+    sizeId: integer()
+      .references(() => Size.id)
+      .notNull(),
+    price: integer().notNull(),
+    stockQuantity: integer().notNull().default(0),
+    ...timestamps,
+  },
+  (t) => [unique().on(t.productId, t.sizeId)],
+);
 
 export const ProductReview = hustlSchema.table('product_review', {
   id: serial().primaryKey(),
@@ -487,7 +503,7 @@ export const OrderItemRelations = relations(OrderItem, ({ one }) => ({
 
 export const Store = hustlSchema.table('store', {
   id: serial().primaryKey(),
-  name: varchar().notNull(),
+  name: varchar().notNull().unique(),
   description: text(),
   address: text(),
   phone: varchar(),
