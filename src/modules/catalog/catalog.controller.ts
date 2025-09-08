@@ -145,12 +145,4 @@ export class CatalogController {
     const data = await this.catalogService.getSizes(query);
     return { data, message: RESPONSE.SUCCESS };
   }
-
-  @Auth()
-  @Post('seed')
-  @Version(VERSION_ONE)
-  async seedDatabase() {
-    await this.catalogService.seedDatabase();
-    return { message: 'Database seeded successfully' };
-  }
 }

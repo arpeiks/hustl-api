@@ -46,8 +46,8 @@ export class StoreService {
     const data = await this.db.query.Store.findMany({
       limit,
       offset,
-      orderBy: desc(Store.createdAt),
       with: { owner: true },
+      orderBy: desc(Store.createdAt),
       where: and(activeFilter, queryFilter),
     });
 
@@ -72,13 +72,5 @@ export class StoreService {
     if (!store) throw new NotFoundException('store not found');
 
     return store;
-  }
-
-  async deleteStore(storeId: number) {
-    const store = await this.db.query.Store.findFirst({ where: eq(Store.id, storeId) });
-    if (!store) throw new NotFoundException('store not found');
-
-    await this.db.delete(Store).where(eq(Store.id, storeId));
-    return {};
   }
 }

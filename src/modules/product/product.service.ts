@@ -29,7 +29,7 @@ export class ProductService {
     const storeId = user.store?.id;
     let images: string[] | undefined;
     if (!storeId) throw new NotFoundException('store not found');
-    
+
     const sku = this.generateSKU(storeId, body.name);
 
     if (body.brandId) {
@@ -194,10 +194,10 @@ export class ProductService {
     return productSize;
   }
 
-    async deleteProduct(user: TUser, productId: number) {
+  async deleteProduct(user: TUser, productId: number) {
     const storeId = user.store?.id;
     if (!storeId) throw new NotFoundException('store not found');
-    
+
     const product = await this.db.query.Product.findFirst({
       where: and(eq(Product.id, productId), eq(Product.storeId, storeId), isNull(Product.deletedAt)),
     });
@@ -238,13 +238,13 @@ export class ProductService {
     const storeId = user.store?.id;
     const { limit, offset } = getPage(query);
     const q = query.q ? `%${query.q}%` : undefined;
+    const notDeletedFilter = isNull(Product.deletedAt);
     const storeFilter = storeId ? eq(Product.storeId, storeId) : undefined;
     const brandFilter = query.brandId ? eq(Product.brandId, query.brandId) : undefined;
     const categoryFilter = query.categoryId ? eq(Product.categoryId, query.categoryId) : undefined;
     const queryFilter = q ? or(ilike(Product.name, q), ilike(Product.description || '', q)) : undefined;
     const activeFilter = query.isActive !== undefined ? eq(Product.isActive, !!query.isActive) : undefined;
     const featuredFilter = query.isFeatured !== undefined ? eq(Product.isFeatured, !!query.isFeatured) : undefined;
-    const notDeletedFilter = isNull(Product.deletedAt);
 
     const [stats] = await this.db
       .select({ count: count(Product.id) })

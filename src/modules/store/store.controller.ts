@@ -5,7 +5,7 @@ import { TUser } from '../drizzle/schema';
 import { StoreService } from './store.service';
 import { Auth } from '@/modules/auth/decorators/auth.decorator';
 import { ReqUser } from '@/modules/auth/decorators/user.decorator';
-import { Get, Put, Post, Body, Query, Param, Delete, Version, Controller } from '@nestjs/common';
+import { Get, Put, Post, Body, Query, Param, Version, Controller } from '@nestjs/common';
 
 @Controller('store')
 export class StoreController {
@@ -16,14 +16,6 @@ export class StoreController {
   @Version(VERSION_ONE)
   async getStoreById(@Param('id') id: number) {
     const data = await this.storeService.getStoreById(id);
-    return { data, message: RESPONSE.SUCCESS };
-  }
-
-  @Auth()
-  @Delete(':id')
-  @Version(VERSION_ONE)
-  async deleteStore(@Param('id') id: number) {
-    const data = await this.storeService.deleteStore(id);
     return { data, message: RESPONSE.SUCCESS };
   }
 

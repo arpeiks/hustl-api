@@ -22,9 +22,7 @@ import { MultiImageInterceptor } from '@/interceptors/file.interceptor';
 
 @Controller('product')
 export class ProductController {
-  constructor(
-    private readonly productService: ProductService,
-  ) {}
+  constructor(private readonly productService: ProductService) {}
 
   @Auth()
   @Get('store')
