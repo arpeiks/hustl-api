@@ -15,7 +15,7 @@ export class SeedService implements OnModuleInit {
 
   async onModuleInit() {
     console.log('🚀 SeedService initialized, starting automatic seeding...');
-    await this.seedCurrency();
+    await this.seedDatabase();
   }
 
   async seedCurrency() {
