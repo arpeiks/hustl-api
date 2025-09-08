@@ -1,4 +1,28 @@
-import { IsString, IsNumber, IsOptional, IsBoolean, IsInt } from 'class-validator';
+import {
+  IsInt,
+  IsString,
+  IsNumber,
+  IsBoolean,
+  IsOptional,
+  IsArray,
+  ValidateNested,
+  IsDateString,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class DayAvailabilityDto {
+  @IsString()
+  name: string;
+
+  @IsDateString()
+  from: string;
+
+  @IsDateString()
+  to: string;
+
+  @IsBoolean()
+  active: boolean;
+}
 
 export class CreateStoreBody {
   @IsString()
@@ -20,9 +44,15 @@ export class CreateStoreBody {
   @IsOptional()
   isOnline?: boolean;
 
-  @IsString()
+  @IsArray()
   @IsOptional()
-  businessHours?: string;
+  @ValidateNested({ each: true })
+  @Type(() => DayAvailabilityDto)
+  availability?: DayAvailabilityDto[];
+
+  @IsBoolean()
+  @IsOptional()
+  offerDeliveryService?: boolean;
 
   @IsNumber()
   @IsOptional()
@@ -70,9 +100,15 @@ export class UpdateStoreBody {
   @IsOptional()
   isOnline?: boolean;
 
-  @IsString()
+  @IsArray()
   @IsOptional()
-  businessHours?: string;
+  @ValidateNested({ each: true })
+  @Type(() => DayAvailabilityDto)
+  availability?: DayAvailabilityDto[];
+
+  @IsBoolean()
+  @IsOptional()
+  offerDeliveryService?: boolean;
 
   @IsNumber()
   @IsOptional()
@@ -115,4 +151,11 @@ export class GetStoreQuery {
   @IsInt()
   @IsOptional()
   isActive?: number;
+}
+
+export class UpdateStoreAvailabilityBody {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => DayAvailabilityDto)
+  availability: DayAvailabilityDto[];
 }

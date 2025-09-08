@@ -1,5 +1,6 @@
 import {
   text,
+  jsonb,
   serial,
   pgEnum,
   unique,
@@ -491,7 +492,8 @@ export const Store = hustlSchema.table('store', {
   address: text(),
   phone: varchar(),
   isOnline: boolean().default(true),
-  businessHours: text(),
+  availability: jsonb(),
+  offerDeliveryService: boolean().default(false),
   deliveryRadius: integer().default(0),
   deliveryFee: integer().default(0),
   bankName: varchar(),
@@ -527,8 +529,8 @@ export const CartItem = hustlSchema.table('cart_item', {
 
 export const StoreRelations = relations(Store, ({ one, many }) => ({
   orders: many(Order),
-  owner: one(User, { fields: [Store.ownerId], references: [User.id] }),
   products: many(Product),
+  owner: one(User, { fields: [Store.ownerId], references: [User.id] }),
 }));
 
 export const CartRelations = relations(Cart, ({ one, many }) => ({

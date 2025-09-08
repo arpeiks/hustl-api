@@ -1,1 +1,0 @@
-ALTER TABLE "hustl"."currency" ADD COLUMN "logo" varchar;

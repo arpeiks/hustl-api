@@ -1,7 +1,7 @@
 import * as Dto from './dto';
 import { DATABASE } from '@/consts';
 import { TDatabase } from '@/types';
-import { Store } from '../drizzle/schema';
+import { Store, TUser } from '../drizzle/schema';
 import { generatePagination, getPage } from '@/utils';
 import { eq, and, desc, count, or, ilike } from 'drizzle-orm';
 import { Injectable, Inject, NotFoundException } from '@nestjs/common';
@@ -10,14 +10,25 @@ import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 export class StoreService {
   constructor(@Inject(DATABASE) private readonly db: TDatabase) {}
 
-  async createStore(ownerId: number, body: Dto.CreateStoreBody) {
+  async createStore(user: TUser, body: Dto.CreateStoreBody) {
+    const ownerId = user.id;
     const existingStore = await this.db.query.Store.findFirst({ where: eq(Store.ownerId, ownerId) });
-    if (existingStore) return existingStore;
+
+    if (existingStore) {
+      const [updatedStore] = await this.db
+        .update(Store)
+        .set({ ...body, deletedAt: null, updatedAt: new Date() })
+        .where(eq(Store.id, existingStore.id))
+        .returning();
+
+      return updatedStore;
+    }
 
     const [store] = await this.db
       .insert(Store)
       .values({ ...body, ownerId })
       .returning();
+
     return store;
   }
 
@@ -46,28 +57,8 @@ export class StoreService {
   }
 
   async getStoreById(storeId: number) {
-    const store = await this.db.query.Store.findFirst({
-      where: eq(Store.id, storeId),
-      with: { owner: true },
-    });
-
-    if (!store) {
-      throw new NotFoundException('Store not found');
-    }
-
-    return store;
-  }
-
-  async getStoreByOwnerId(ownerId: number) {
-    const store = await this.db.query.Store.findFirst({
-      where: eq(Store.ownerId, ownerId),
-      with: { owner: true },
-    });
-
-    if (!store) {
-      throw new NotFoundException('Store not found');
-    }
-
+    const store = await this.db.query.Store.findFirst({ where: eq(Store.id, storeId), with: { owner: true } });
+    if (!store) throw new NotFoundException('store not found');
     return store;
   }
 
@@ -78,41 +69,16 @@ export class StoreService {
       .where(eq(Store.id, storeId))
       .returning();
 
-    if (!store) {
-      throw new NotFoundException('Store not found');
-    }
+    if (!store) throw new NotFoundException('store not found');
 
     return store;
   }
 
-  async toggleStoreOnline(storeId: number) {
-    const store = await this.db.query.Store.findFirst({
-      where: eq(Store.id, storeId),
-    });
-
-    if (!store) {
-      throw new NotFoundException('Store not found');
-    }
-
-    const [updatedStore] = await this.db
-      .update(Store)
-      .set({ isOnline: !store.isOnline, updatedAt: new Date() })
-      .where(eq(Store.id, storeId))
-      .returning();
-
-    return updatedStore;
-  }
-
   async deleteStore(storeId: number) {
-    const store = await this.db.query.Store.findFirst({
-      where: eq(Store.id, storeId),
-    });
-
-    if (!store) {
-      throw new NotFoundException('Store not found');
-    }
+    const store = await this.db.query.Store.findFirst({ where: eq(Store.id, storeId) });
+    if (!store) throw new NotFoundException('store not found');
 
     await this.db.delete(Store).where(eq(Store.id, storeId));
-    return { success: true };
+    return {};
   }
 }

@@ -5,127 +5,15 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1756438854437,
-      "tag": "0000_mushy_bedlam",
+      "when": 1757332369264,
+      "tag": "0000_tranquil_boomer",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "7",
-      "when": 1756475044617,
-      "tag": "0001_silky_owl",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1756546561474,
-      "tag": "0002_nostalgic_mockingbird",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1756547115037,
-      "tag": "0003_free_squadron_sinister",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1756549682603,
-      "tag": "0004_sturdy_may_parker",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1756573015213,
-      "tag": "0005_aromatic_ben_grimm",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1756574753305,
-      "tag": "0006_wild_doomsday",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1756575126888,
-      "tag": "0007_right_kronos",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "7",
-      "when": 1756575442035,
-      "tag": "0008_sudden_impossible_man",
-      "breakpoints": true
-    },
-    {
-      "idx": 9,
-      "version": "7",
-      "when": 1756706573690,
-      "tag": "0009_mighty_the_leader",
-      "breakpoints": true
-    },
-    {
-      "idx": 10,
-      "version": "7",
-      "when": 1756706734046,
-      "tag": "0010_complete_phalanx",
-      "breakpoints": true
-    },
-    {
-      "idx": 11,
-      "version": "7",
-      "when": 1756712131075,
-      "tag": "0011_same_red_shift",
-      "breakpoints": true
-    },
-    {
-      "idx": 12,
-      "version": "7",
-      "when": 1756715525039,
-      "tag": "0012_clammy_franklin_storm",
-      "breakpoints": true
-    },
-    {
-      "idx": 13,
-      "version": "7",
-      "when": 1756881571605,
-      "tag": "0013_plain_next_avengers",
-      "breakpoints": true
-    },
-    {
-      "idx": 14,
-      "version": "7",
-      "when": 1756882722896,
-      "tag": "0014_wonderful_the_executioner",
-      "breakpoints": true
-    },
-    {
-      "idx": 15,
-      "version": "7",
-      "when": 1756970209579,
-      "tag": "0015_steep_kang",
-      "breakpoints": true
-    },
-    {
-      "idx": 16,
-      "version": "7",
-      "when": 1756972926403,
-      "tag": "0016_slim_pepper_potts",
-      "breakpoints": true
-    },
-    {
-      "idx": 17,
-      "version": "7",
-      "when": 1757063528769,
-      "tag": "0017_chunky_invaders",
+      "when": 1757333148797,
+      "tag": "0001_lively_lady_vermin",
       "breakpoints": true
     }
   ]

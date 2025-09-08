@@ -6,6 +6,17 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 
+import {
+  Otp,
+  Auth,
+  User,
+  Store,
+  TUser,
+  Wallet,
+  UserService,
+  Subscription,
+  NotificationSetting,
+} from '../drizzle/schema';
 import * as Dto from './dto';
 import { TDatabase } from '@/types';
 import { DATABASE } from '@/consts';
@@ -14,7 +25,6 @@ import { generateOtp, minutesFromNow } from '@/utils';
 import { ArgonService } from '@/services/argon.service';
 import { TokenService } from '@/services/token.service';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
-import { Otp, Auth, User, TUser, Wallet, UserService, Subscription, NotificationSetting } from '../drizzle/schema';
 
 @Injectable()
 export class AuthService {
@@ -51,6 +61,7 @@ export class AuthService {
       const token = this.token.generateAccessToken({ sub: user.id });
       await tx.insert(NotificationSetting).values({ userId: user.id });
       await tx.insert(Auth).values({ userId: user.id, token, password: hashedPassword });
+      await tx.insert(Store).values({ ownerId: user.id, name: body.phone || body.email });
       await tx.insert(Otp).values({ code, identifier: body.phone, type: 'PHONE_VERIFICATION', expiredAt });
       for (const currency of currencies) await tx.insert(Wallet).values({ userId: user.id, currencyId: currency.id });
 
