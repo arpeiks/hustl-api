@@ -1,10 +1,21 @@
+import {
+  Size,
+  User,
+  Auth,
+  Brand,
+  Store,
+  Product,
+  Currency,
+  Category,
+  ProductSize,
+  ShippingMethod,
+} from '../drizzle/schema';
 import { go } from '@/utils';
 import { eq } from 'drizzle-orm';
 import { DATABASE } from '@/consts';
 import { TDatabase } from '@/types';
 import { ArgonService } from '../../services/argon.service';
 import { Injectable, Inject, OnModuleInit } from '@nestjs/common';
-import { Currency, Brand, Category, Size, Product, ProductSize, Store, User, Auth } from '../drizzle/schema';
 
 @Injectable()
 export class SeedService implements OnModuleInit {
@@ -46,10 +57,41 @@ export class SeedService implements OnModuleInit {
     return result;
   }
 
+  async seedShippingMethods() {
+    const [result, error] = await go(async () => {
+      console.log('🌱 Starting shipping methods seeding...');
+
+      const shippingMethods = [
+        {
+          price: 0,
+          isActive: true,
+          name: 'Standard',
+          estimatedDays: '5-7 business days',
+          description: 'Standard shipping method',
+        },
+      ];
+
+      for (const method of shippingMethods) {
+        await this.db
+          .insert(ShippingMethod)
+          .values(method)
+          .onConflictDoUpdate({
+            target: [ShippingMethod.name],
+            set: { ...method, updatedAt: new Date() },
+          });
+        console.log(`✅ Upserted shipping method: ${method.name}`);
+      }
+    });
+
+    if (error) return console.error('❌ Error seeding shipping methods:', error);
+    return result;
+  }
+
   async seedDatabase() {
     console.log('🌱 Starting comprehensive database seeding...');
 
     await this.seedCurrency();
+    await this.seedShippingMethods();
     await this.seedBrands();
     await this.seedCategories();
     await this.seedSizes();

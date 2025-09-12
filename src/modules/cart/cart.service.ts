@@ -2,8 +2,8 @@ import * as Dto from './dto';
 import { DATABASE } from '@/consts';
 import { TDatabase } from '@/types';
 import { eq, and } from 'drizzle-orm';
-import { Cart, CartItem, Product, TUser } from '../drizzle/schema';
-import { Injectable, Inject, NotFoundException } from '@nestjs/common';
+import { Cart, CartItem, Product, ProductSize, TUser } from '../drizzle/schema';
+import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
 
 @Injectable()
 export class CartService {
@@ -28,6 +28,7 @@ export class CartService {
 
   async HandleAddToCart(user: TUser, body: Dto.AddToCartBody) {
     const cart = await this.getCart(user);
+    const requestedQuantity = body.quantity || 1;
 
     const existingItem = await this.db.query.CartItem.findFirst({
       where: and(
@@ -38,7 +39,9 @@ export class CartService {
     });
 
     if (existingItem) {
-      const newQuantity = existingItem.quantity + (body.quantity || 1);
+      const newQuantity = existingItem.quantity + requestedQuantity;
+      await this.checkInventory(body.productId, body.productSizeId, newQuantity);
+
       const [updatedItem] = await this.db
         .update(CartItem)
         .set({ quantity: newQuantity, updatedAt: new Date() })
@@ -48,15 +51,14 @@ export class CartService {
       return updatedItem;
     }
 
-    const product = await this.db.query.Product.findFirst({ where: eq(Product.id, body.productId) });
-    if (!product) throw new NotFoundException('product not found');
+    await this.checkInventory(body.productId, body.productSizeId, requestedQuantity);
 
     const [newItem] = await this.db
       .insert(CartItem)
       .values({
         cartId: cart.id,
         productId: body.productId,
-        quantity: body.quantity || 1,
+        quantity: requestedQuantity,
         productSizeId: body.productSizeId,
       })
       .returning();
@@ -66,6 +68,17 @@ export class CartService {
 
   async HandleUpdateCartItem(user: TUser, itemId: number, body: Dto.UpdateCartItemBody) {
     const cart = await this.getCart(user);
+
+    const existingItem = await this.db.query.CartItem.findFirst({
+      where: and(eq(CartItem.id, itemId), eq(CartItem.cartId, cart.id)),
+      with: { product: true, productSize: true },
+    });
+
+    if (!existingItem) throw new NotFoundException('cart item not found');
+
+    if (body.quantity !== undefined) {
+      await this.checkInventory(existingItem.productId, existingItem.productSizeId || undefined, body.quantity);
+    }
 
     const [updatedItem] = await this.db
       .update(CartItem)
@@ -91,5 +104,34 @@ export class CartService {
 
   async HandleGetCart(user: TUser) {
     return await this.getCart(user);
+  }
+
+  private async checkInventory(productId: number, productSizeId: number | undefined, requestedQuantity: number) {
+    const product = await this.db.query.Product.findFirst({
+      with: { productSizes: true },
+      where: eq(Product.id, productId),
+    });
+
+    if (!product) throw new NotFoundException('product not found');
+
+    if (productSizeId) {
+      const productSize = await this.db.query.ProductSize.findFirst({
+        where: and(eq(ProductSize.productId, productId), eq(ProductSize.id, productSizeId)),
+      });
+
+      if (!productSize) throw new NotFoundException('product size not found');
+
+      if (productSize.stockQuantity < requestedQuantity) {
+        throw new BadRequestException(
+          `Insufficient stock. Available: ${productSize.stockQuantity}, Requested: ${requestedQuantity}`,
+        );
+      }
+    } else {
+      if (product.stockQuantity < requestedQuantity) {
+        throw new BadRequestException(
+          `Insufficient stock. Available: ${product.stockQuantity}, Requested: ${requestedQuantity}`,
+        );
+      }
+    }
   }
 }

@@ -60,13 +60,21 @@ export const OrderStatusMap = [
 export const OrderStatusEnum = pgEnum('order_status', OrderStatusMap);
 export type TOrderStatus = (typeof OrderStatusEnum.enumValues)[number];
 
+export const OrderItemStatusMap = [
+  'pending',
+  'shipped',
+  'refunded',
+  'confirmed',
+  'delivered',
+  'cancelled',
+  'processing',
+] as const;
+export const OrderItemStatusEnum = pgEnum('order_item_status', OrderItemStatusMap);
+export type TOrderItemStatus = (typeof OrderItemStatusEnum.enumValues)[number];
+
 export const PaymentStatusMap = ['pending', 'paid', 'failed', 'refunded'] as const;
 export const PaymentStatusEnum = pgEnum('payment_status', PaymentStatusMap);
 export type TPaymentStatus = (typeof PaymentStatusEnum.enumValues)[number];
-
-export const PaymentMethodMap = ['wallet', 'card', 'bank_transfer', 'cash'] as const;
-export const PaymentMethodEnum = pgEnum('payment_method', PaymentMethodMap);
-export type TPaymentMethod = (typeof PaymentMethodEnum.enumValues)[number];
 
 export type TAuth = typeof Auth.$inferSelect;
 export type TSize = typeof Size.$inferSelect;
@@ -86,6 +94,8 @@ export type TProductSize = typeof ProductSize.$inferSelect;
 export type TSubscription = typeof Subscription.$inferSelect;
 export type TNotification = typeof Notification.$inferSelect;
 export type TProductReview = typeof ProductReview.$inferSelect;
+export type TShippingMethod = typeof ShippingMethod.$inferSelect;
+export type TPaymentDetails = typeof PaymentDetails.$inferSelect;
 export type TSubscriptionPlan = typeof SubscriptionPlan.$inferSelect;
 export type TSubscriptionFeature = typeof SubscriptionFeature.$inferSelect;
 export type TNotificationSetting = typeof NotificationSetting.$inferSelect;
@@ -185,6 +195,41 @@ export const Currency = hustlSchema.table('currency', {
   logo: varchar(),
   symbol: varchar(),
   isActive: boolean().default(true),
+  ...timestamps,
+});
+
+export const ShippingMethod = hustlSchema.table('shipping_method', {
+  id: serial().primaryKey(),
+  name: varchar().notNull().unique(),
+  description: text(),
+  price: integer().notNull().default(0),
+  estimatedDays: varchar(),
+  isActive: boolean().default(true),
+  ...timestamps,
+});
+
+export const PaymentDetails = hustlSchema.table('payment_details', {
+  id: serial().primaryKey(),
+  orderId: integer()
+    .references(() => Order.id)
+    .notNull(),
+  paymentProvider: varchar().notNull(),
+  paymentMethod: varchar().notNull(),
+  amount: integer().notNull(),
+  currencyId: integer()
+    .references(() => Currency.id)
+    .notNull(),
+  status: PaymentStatusEnum().default('pending'),
+  externalTransactionId: varchar(),
+  externalReference: varchar(),
+  gatewayResponse: jsonb(),
+  fees: integer().default(0),
+  netAmount: integer().notNull(),
+  isEscrow: boolean().default(false),
+  escrowReleasedAt: timestamp(tzConfig),
+  refundedAt: timestamp(tzConfig),
+  refundAmount: integer().default(0),
+  refundReason: text(),
   ...timestamps,
 });
 
@@ -347,12 +392,9 @@ export const Order = hustlSchema.table('order', {
   buyerId: integer()
     .references(() => User.id)
     .notNull(),
-  storeId: integer()
-    .references(() => Store.id)
-    .notNull(),
   status: OrderStatusEnum().default('pending'),
   paymentStatus: PaymentStatusEnum().default('pending'),
-  paymentMethod: PaymentMethodEnum(),
+  shippingMethodId: integer().references(() => ShippingMethod.id),
   subtotal: integer().notNull(),
   tax: integer().notNull().default(0),
   shipping: integer().notNull().default(0),
@@ -360,9 +402,19 @@ export const Order = hustlSchema.table('order', {
   currencyId: integer()
     .references(() => Currency.id)
     .notNull(),
+  email: varchar(),
+  phone: varchar(),
+  name: varchar(),
   shippingAddress: text().notNull(),
   billingAddress: text(),
   notes: text(),
+  isMultiVendor: boolean().default(false),
+  confirmedAt: timestamp(tzConfig),
+  processingAt: timestamp(tzConfig),
+  dispatchedAt: timestamp(tzConfig),
+  deliveredAt: timestamp(tzConfig),
+  cancelledAt: timestamp(tzConfig),
+  refundedAt: timestamp(tzConfig),
   ...timestamps,
 });
 
@@ -375,9 +427,19 @@ export const OrderItem = hustlSchema.table('order_item', {
     .references(() => Product.id)
     .notNull(),
   productSizeId: integer().references(() => ProductSize.id),
+  storeId: integer()
+    .references(() => Store.id)
+    .notNull(),
   quantity: integer().notNull(),
   unitPrice: integer().notNull(),
   totalPrice: integer().notNull(),
+  status: OrderItemStatusEnum().default('pending'),
+  confirmedAt: timestamp(tzConfig),
+  processingAt: timestamp(tzConfig),
+  shippedAt: timestamp(tzConfig),
+  deliveredAt: timestamp(tzConfig),
+  cancelledAt: timestamp(tzConfig),
+  refundedAt: timestamp(tzConfig),
   ...timestamps,
 });
 
@@ -490,15 +552,26 @@ export const ProductReviewRelations = relations(ProductReview, ({ one }) => ({
 
 export const OrderRelations = relations(Order, ({ many, one }) => ({
   orderItems: many(OrderItem),
+  paymentDetails: many(PaymentDetails),
   currency: one(Currency, { fields: [Order.currencyId], references: [Currency.id] }),
   buyer: one(User, { fields: [Order.buyerId], references: [User.id], relationName: 'buyer' }),
-  store: one(Store, { fields: [Order.storeId], references: [Store.id] }),
+  shippingMethod: one(ShippingMethod, { fields: [Order.shippingMethodId], references: [ShippingMethod.id] }),
 }));
 
 export const OrderItemRelations = relations(OrderItem, ({ one }) => ({
+  store: one(Store, { fields: [OrderItem.storeId], references: [Store.id] }),
   order: one(Order, { fields: [OrderItem.orderId], references: [Order.id] }),
   product: one(Product, { fields: [OrderItem.productId], references: [Product.id] }),
   productSize: one(ProductSize, { fields: [OrderItem.productSizeId], references: [ProductSize.id] }),
+}));
+
+export const ShippingMethodRelations = relations(ShippingMethod, ({ many }) => ({
+  orders: many(Order),
+}));
+
+export const PaymentDetailsRelations = relations(PaymentDetails, ({ one }) => ({
+  order: one(Order, { fields: [PaymentDetails.orderId], references: [Order.id] }),
+  currency: one(Currency, { fields: [PaymentDetails.currencyId], references: [Currency.id] }),
 }));
 
 export const Store = hustlSchema.table('store', {
@@ -544,8 +617,8 @@ export const CartItem = hustlSchema.table('cart_item', {
 });
 
 export const StoreRelations = relations(Store, ({ one, many }) => ({
-  orders: many(Order),
   products: many(Product),
+  orderItems: many(OrderItem),
   owner: one(User, { fields: [Store.ownerId], references: [User.id] }),
 }));
 
