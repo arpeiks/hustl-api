@@ -92,3 +92,7 @@ export const calculateIntervalDate = (intervalUnit: string, interval: number) =>
 
   return new Date(now.getTime() + intervalMs);
 };
+
+export const getPaystackAuthorizationHeader = (secretKey: string): string => {
+  return `Bearer ${secretKey}`;
+};

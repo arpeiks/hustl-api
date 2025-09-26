@@ -5,50 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1757352246692,
-      "tag": "0000_strong_domino",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1757361028072,
-      "tag": "0001_tearful_thaddeus_ross",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1757592533135,
-      "tag": "0002_broad_silvermane",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1757665556903,
-      "tag": "0003_cool_betty_brant",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1757672383760,
-      "tag": "0004_needy_sharon_ventura",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1757681452478,
-      "tag": "0005_clumsy_mockingbird",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1757681452479,
-      "tag": "0006_drop_store_id_from_order",
+      "when": 1758853740291,
+      "tag": "0000_early_hitman",
       "breakpoints": true
     }
   ]

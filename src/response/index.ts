@@ -6,4 +6,5 @@ export const RESPONSE = {
   INVALID_CREDENTIALS: 'Invalid credentials',
   NOT_LOGGED_IN: 'Invalid authentication! Login',
   NOT_FOUND: 'Requested resouce not currently available',
+  INVALID_ACCOUNT_DETAILS: 'Invalid account details provided',
 };

@@ -5,3 +5,5 @@ export const SUCCESS = 'success';
 export const FEATURE = 'FEATURE';
 export const DATABASE = 'database';
 export const GLOBAL_PREFIX = '/api';
+
+export const PAYSTACK = { AXIOS: 'PAYSTACK_AXIOS', BASE_URL: 'https://api.paystack.co' };

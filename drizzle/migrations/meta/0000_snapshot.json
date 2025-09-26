@@ -1,5 +1,5 @@
 {
-  "id": "16cbd674-b622-4a98-a00c-3536458ede77",
+  "id": "1da0e305-16a1-4916-bec7-47c405dc6f60",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -382,7 +382,15 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "category_name_unique": {
+          "name": "category_name_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "name"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -686,12 +694,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "store_id": {
-          "name": "store_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
         "status": {
           "name": "status",
           "type": "order_status",
@@ -708,10 +710,9 @@
           "notNull": false,
           "default": "'pending'"
         },
-        "payment_method": {
-          "name": "payment_method",
-          "type": "payment_method",
-          "typeSchema": "public",
+        "shipping_method_id": {
+          "name": "shipping_method_id",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false
         },
@@ -747,6 +748,24 @@
           "primaryKey": false,
           "notNull": true
         },
+        "email": {
+          "name": "email",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "phone": {
+          "name": "phone",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
         "shipping_address": {
           "name": "shipping_address",
           "type": "text",
@@ -762,6 +781,49 @@
         "notes": {
           "name": "notes",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_multi_vendor": {
+          "name": "is_multi_vendor",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "confirmed_at": {
+          "name": "confirmed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "processing_at": {
+          "name": "processing_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dispatched_at": {
+          "name": "dispatched_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "delivered_at": {
+          "name": "delivered_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cancelled_at": {
+          "name": "cancelled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "refunded_at": {
+          "name": "refunded_at",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },
@@ -802,13 +864,13 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "order_store_id_store_id_fk": {
-          "name": "order_store_id_store_id_fk",
+        "order_shipping_method_id_shipping_method_id_fk": {
+          "name": "order_shipping_method_id_shipping_method_id_fk",
           "tableFrom": "order",
-          "tableTo": "store",
+          "tableTo": "shipping_method",
           "schemaTo": "hustl",
           "columnsFrom": [
-            "store_id"
+            "shipping_method_id"
           ],
           "columnsTo": [
             "id"
@@ -873,6 +935,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "store_id": {
+          "name": "store_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
         "quantity": {
           "name": "quantity",
           "type": "integer",
@@ -890,6 +958,50 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "order_item_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'pending'"
+        },
+        "confirmed_at": {
+          "name": "confirmed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "processing_at": {
+          "name": "processing_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "shipped_at": {
+          "name": "shipped_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "delivered_at": {
+          "name": "delivered_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cancelled_at": {
+          "name": "cancelled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "refunded_at": {
+          "name": "refunded_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         },
         "deleted_at": {
           "name": "deleted_at",
@@ -949,6 +1061,20 @@
           "schemaTo": "hustl",
           "columnsFrom": [
             "product_size_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "order_item_store_id_store_id_fk": {
+          "name": "order_item_store_id_store_id_fk",
+          "tableFrom": "order_item",
+          "tableTo": "store",
+          "schemaTo": "hustl",
+          "columnsFrom": [
+            "store_id"
           ],
           "columnsTo": [
             "id"
@@ -1016,6 +1142,175 @@
       },
       "indexes": {},
       "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "hustl.payment_details": {
+      "name": "payment_details",
+      "schema": "hustl",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "order_id": {
+          "name": "order_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payment_provider": {
+          "name": "payment_provider",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payment_method": {
+          "name": "payment_method",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount": {
+          "name": "amount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency_id": {
+          "name": "currency_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "payment_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'pending'"
+        },
+        "external_transaction_id": {
+          "name": "external_transaction_id",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "external_reference": {
+          "name": "external_reference",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gateway_response": {
+          "name": "gateway_response",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fees": {
+          "name": "fees",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "net_amount": {
+          "name": "net_amount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_escrow": {
+          "name": "is_escrow",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "escrow_released_at": {
+          "name": "escrow_released_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "refunded_at": {
+          "name": "refunded_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "refund_amount": {
+          "name": "refund_amount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "refund_reason": {
+          "name": "refund_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "payment_details_order_id_order_id_fk": {
+          "name": "payment_details_order_id_order_id_fk",
+          "tableFrom": "payment_details",
+          "tableTo": "order",
+          "schemaTo": "hustl",
+          "columnsFrom": [
+            "order_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "payment_details_currency_id_currency_id_fk": {
+          "name": "payment_details_currency_id_currency_id_fk",
+          "tableFrom": "payment_details",
+          "tableTo": "currency",
+          "schemaTo": "hustl",
+          "columnsFrom": [
+            "currency_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -1388,7 +1683,16 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "product_size_productId_sizeId_unique": {
+          "name": "product_size_productId_sizeId_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "product_id",
+            "size_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -1439,7 +1743,94 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "service_listing_name_unique": {
+          "name": "service_listing_name_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "name"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "hustl.shipping_method": {
+      "name": "shipping_method",
+      "schema": "hustl",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "price": {
+          "name": "price",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "estimated_days": {
+          "name": "estimated_days",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": true
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "shipping_method_name_unique": {
+          "name": "shipping_method_name_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "name"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -1518,7 +1909,17 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "size_name_value_categoryId_unique": {
+          "name": "size_name_value_categoryId_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "name",
+            "value",
+            "category_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -1661,7 +2062,15 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "store_name_unique": {
+          "name": "store_name_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "name"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -1920,7 +2329,16 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "subscription_plan_name_currency_unique": {
+          "name": "subscription_plan_name_currency_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "name",
+            "currency"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -2322,7 +2740,17 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "wallet_userId_currencyId_type_unique": {
+          "name": "wallet_userId_currencyId_type_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "user_id",
+            "currency_id",
+            "type"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -2337,6 +2765,19 @@
         "week",
         "month",
         "year"
+      ]
+    },
+    "public.order_item_status": {
+      "name": "order_item_status",
+      "schema": "public",
+      "values": [
+        "pending",
+        "shipped",
+        "refunded",
+        "confirmed",
+        "delivered",
+        "cancelled",
+        "processing"
       ]
     },
     "public.order_status": {
@@ -2360,16 +2801,6 @@
         "EMAIL_VERIFICATION",
         "EMAIL_PASSWORD_RESET",
         "PHONE_PASSWORD_RESET"
-      ]
-    },
-    "public.payment_method": {
-      "name": "payment_method",
-      "schema": "public",
-      "values": [
-        "wallet",
-        "card",
-        "bank_transfer",
-        "cash"
       ]
     },
     "public.payment_status": {

@@ -15,6 +15,7 @@ import { ServiceModule } from '../service/service.module';
 import { ProductModule } from '../product/product.module';
 import { CatalogModule } from '../catalog/catalog.module';
 import { CurrencyModule } from '../currency/currency.module';
+import { PaystackModule } from '../paystack/paystack.module';
 import { SubscriptionModule } from '../subscription/subscription.module';
 import { NotificationModule } from '../notification/notification.module';
 
@@ -34,6 +35,7 @@ import { NotificationModule } from '../notification/notification.module';
     ProductModule,
     CatalogModule,
     CurrencyModule,
+    PaystackModule,
     SubscriptionModule,
     NotificationModule,
     ConfigModule.forRoot({ load: [config], isGlobal: true }),

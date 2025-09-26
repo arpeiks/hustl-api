@@ -1,9 +1,9 @@
 CREATE SCHEMA "hustl";
 --> statement-breakpoint
 CREATE TYPE "public"."interval_unit" AS ENUM('day', 'week', 'month', 'year');--> statement-breakpoint
+CREATE TYPE "public"."order_item_status" AS ENUM('pending', 'shipped', 'refunded', 'confirmed', 'delivered', 'cancelled', 'processing');--> statement-breakpoint
 CREATE TYPE "public"."order_status" AS ENUM('pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded');--> statement-breakpoint
 CREATE TYPE "public"."otp_type" AS ENUM('PHONE_VERIFICATION', 'EMAIL_VERIFICATION', 'EMAIL_PASSWORD_RESET', 'PHONE_PASSWORD_RESET');--> statement-breakpoint
-CREATE TYPE "public"."payment_method" AS ENUM('wallet', 'card', 'bank_transfer', 'cash');--> statement-breakpoint
 CREATE TYPE "public"."payment_status" AS ENUM('pending', 'paid', 'failed', 'refunded');--> statement-breakpoint
 CREATE TYPE "public"."role" AS ENUM('user', 'artisan', 'admin');--> statement-breakpoint
 CREATE TYPE "public"."subscription_status" AS ENUM('active', 'expired', 'cancelled');--> statement-breakpoint
@@ -58,7 +58,8 @@ CREATE TABLE "hustl"."category" (
 	"is_active" boolean DEFAULT true,
 	"deleted_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "category_name_unique" UNIQUE("name")
 );
 --> statement-breakpoint
 CREATE TABLE "hustl"."currency" (
@@ -106,18 +107,27 @@ CREATE TABLE "hustl"."order" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"order_number" varchar NOT NULL,
 	"buyer_id" integer NOT NULL,
-	"store_id" integer NOT NULL,
 	"status" "order_status" DEFAULT 'pending',
 	"payment_status" "payment_status" DEFAULT 'pending',
-	"payment_method" "payment_method",
+	"shipping_method_id" integer,
 	"subtotal" integer NOT NULL,
 	"tax" integer DEFAULT 0 NOT NULL,
 	"shipping" integer DEFAULT 0 NOT NULL,
 	"total" integer NOT NULL,
 	"currency_id" integer NOT NULL,
+	"email" varchar,
+	"phone" varchar,
+	"name" varchar,
 	"shipping_address" text NOT NULL,
 	"billing_address" text,
 	"notes" text,
+	"is_multi_vendor" boolean DEFAULT false,
+	"confirmed_at" timestamp with time zone,
+	"processing_at" timestamp with time zone,
+	"dispatched_at" timestamp with time zone,
+	"delivered_at" timestamp with time zone,
+	"cancelled_at" timestamp with time zone,
+	"refunded_at" timestamp with time zone,
 	"deleted_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -129,9 +139,17 @@ CREATE TABLE "hustl"."order_item" (
 	"order_id" integer NOT NULL,
 	"product_id" integer NOT NULL,
 	"product_size_id" integer,
+	"store_id" integer NOT NULL,
 	"quantity" integer NOT NULL,
 	"unit_price" integer NOT NULL,
 	"total_price" integer NOT NULL,
+	"status" "order_item_status" DEFAULT 'pending',
+	"confirmed_at" timestamp with time zone,
+	"processing_at" timestamp with time zone,
+	"shipped_at" timestamp with time zone,
+	"delivered_at" timestamp with time zone,
+	"cancelled_at" timestamp with time zone,
+	"refunded_at" timestamp with time zone,
 	"deleted_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
@@ -145,6 +163,29 @@ CREATE TABLE "hustl"."otp" (
 	"expired_at" timestamp with time zone DEFAULT now(),
 	"created_at" timestamp with time zone DEFAULT now(),
 	"updated_at" timestamp with time zone DEFAULT now()
+);
+--> statement-breakpoint
+CREATE TABLE "hustl"."payment_details" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"order_id" integer NOT NULL,
+	"payment_provider" varchar NOT NULL,
+	"payment_method" varchar NOT NULL,
+	"amount" integer NOT NULL,
+	"currency_id" integer NOT NULL,
+	"status" "payment_status" DEFAULT 'pending',
+	"external_transaction_id" varchar,
+	"external_reference" varchar,
+	"gateway_response" jsonb,
+	"fees" integer DEFAULT 0,
+	"net_amount" integer NOT NULL,
+	"is_escrow" boolean DEFAULT false,
+	"escrow_released_at" timestamp with time zone,
+	"refunded_at" timestamp with time zone,
+	"refund_amount" integer DEFAULT 0,
+	"refund_reason" text,
+	"deleted_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "hustl"."product" (
@@ -187,7 +228,8 @@ CREATE TABLE "hustl"."product_size" (
 	"stock_quantity" integer DEFAULT 0 NOT NULL,
 	"deleted_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "product_size_productId_sizeId_unique" UNIQUE("product_id","size_id")
 );
 --> statement-breakpoint
 CREATE TABLE "hustl"."service_listing" (
@@ -196,7 +238,21 @@ CREATE TABLE "hustl"."service_listing" (
 	"description" text,
 	"deleted_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "service_listing_name_unique" UNIQUE("name")
+);
+--> statement-breakpoint
+CREATE TABLE "hustl"."shipping_method" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"name" varchar NOT NULL,
+	"description" text,
+	"price" integer DEFAULT 0 NOT NULL,
+	"estimated_days" varchar,
+	"is_active" boolean DEFAULT true,
+	"deleted_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "shipping_method_name_unique" UNIQUE("name")
 );
 --> statement-breakpoint
 CREATE TABLE "hustl"."size" (
@@ -207,7 +263,8 @@ CREATE TABLE "hustl"."size" (
 	"is_active" boolean DEFAULT true,
 	"deleted_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "size_name_value_categoryId_unique" UNIQUE("name","value","category_id")
 );
 --> statement-breakpoint
 CREATE TABLE "hustl"."store" (
@@ -228,7 +285,8 @@ CREATE TABLE "hustl"."store" (
 	"owner_id" integer NOT NULL,
 	"deleted_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "store_name_unique" UNIQUE("name")
 );
 --> statement-breakpoint
 CREATE TABLE "hustl"."subscription" (
@@ -264,7 +322,8 @@ CREATE TABLE "hustl"."subscription_plan" (
 	"is_active" boolean DEFAULT true,
 	"deleted_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "subscription_plan_name_currency_unique" UNIQUE("name","currency")
 );
 --> statement-breakpoint
 CREATE TABLE "hustl"."subscription_plan_feature" (
@@ -316,7 +375,8 @@ CREATE TABLE "hustl"."wallet" (
 	"is_active" boolean DEFAULT true,
 	"deleted_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "wallet_userId_currencyId_type_unique" UNIQUE("user_id","currency_id","type")
 );
 --> statement-breakpoint
 ALTER TABLE "hustl"."auth" ADD CONSTRAINT "auth_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "hustl"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -327,11 +387,14 @@ ALTER TABLE "hustl"."cart_item" ADD CONSTRAINT "cart_item_product_size_id_produc
 ALTER TABLE "hustl"."notification" ADD CONSTRAINT "notification_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "hustl"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "hustl"."notification_setting" ADD CONSTRAINT "notification_setting_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "hustl"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "hustl"."order" ADD CONSTRAINT "order_buyer_id_user_id_fk" FOREIGN KEY ("buyer_id") REFERENCES "hustl"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "hustl"."order" ADD CONSTRAINT "order_store_id_store_id_fk" FOREIGN KEY ("store_id") REFERENCES "hustl"."store"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "hustl"."order" ADD CONSTRAINT "order_shipping_method_id_shipping_method_id_fk" FOREIGN KEY ("shipping_method_id") REFERENCES "hustl"."shipping_method"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "hustl"."order" ADD CONSTRAINT "order_currency_id_currency_id_fk" FOREIGN KEY ("currency_id") REFERENCES "hustl"."currency"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "hustl"."order_item" ADD CONSTRAINT "order_item_order_id_order_id_fk" FOREIGN KEY ("order_id") REFERENCES "hustl"."order"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "hustl"."order_item" ADD CONSTRAINT "order_item_product_id_product_id_fk" FOREIGN KEY ("product_id") REFERENCES "hustl"."product"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "hustl"."order_item" ADD CONSTRAINT "order_item_product_size_id_product_size_id_fk" FOREIGN KEY ("product_size_id") REFERENCES "hustl"."product_size"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "hustl"."order_item" ADD CONSTRAINT "order_item_store_id_store_id_fk" FOREIGN KEY ("store_id") REFERENCES "hustl"."store"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "hustl"."payment_details" ADD CONSTRAINT "payment_details_order_id_order_id_fk" FOREIGN KEY ("order_id") REFERENCES "hustl"."order"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "hustl"."payment_details" ADD CONSTRAINT "payment_details_currency_id_currency_id_fk" FOREIGN KEY ("currency_id") REFERENCES "hustl"."currency"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "hustl"."product" ADD CONSTRAINT "product_currency_id_currency_id_fk" FOREIGN KEY ("currency_id") REFERENCES "hustl"."currency"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "hustl"."product" ADD CONSTRAINT "product_brand_id_brand_id_fk" FOREIGN KEY ("brand_id") REFERENCES "hustl"."brand"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "hustl"."product" ADD CONSTRAINT "product_category_id_category_id_fk" FOREIGN KEY ("category_id") REFERENCES "hustl"."category"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
