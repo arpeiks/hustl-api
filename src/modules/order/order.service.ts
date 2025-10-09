@@ -13,12 +13,16 @@ import * as Dto from './dto';
 import { DATABASE } from '@/consts';
 import { TDatabase } from '@/types';
 import { generatePagination, getPage } from '@/utils';
+import { PaystackService } from '@/modules/paystack/paystack.service';
 import { eq, and, desc, count, countDistinct, ilike } from 'drizzle-orm';
 import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
 
 @Injectable()
 export class OrderService {
-  constructor(@Inject(DATABASE) private readonly db: TDatabase) {}
+  constructor(
+    @Inject(DATABASE) private readonly db: TDatabase,
+    private readonly paystack: PaystackService,
+  ) {}
 
   async HandleGetStoreOrderItems(user: TUser, query: Dto.GetOrderQuery) {
     const storeId = user.store?.id;
@@ -214,7 +218,7 @@ export class OrderService {
     }
 
     let shippingCost = 0;
-    const tax = Math.round(subtotal * 0.05);
+    const tax = Math.round(subtotal * 0.0);
 
     if (body.shippingMethodId) {
       const shippingMethod = await this.db.query.ShippingMethod.findFirst({
@@ -236,18 +240,16 @@ export class OrderService {
         total,
         subtotal,
         orderNumber,
+        isMultiVendor,
         name: body.name,
         status: 'pending',
         buyerId: user.id,
         email: body.email,
         phone: body.phone,
-        notes: body.notes,
         shipping: shippingCost,
         paymentStatus: 'pending',
-        billingAddress: body.billingAddress,
         shippingAddress: body.shippingAddress,
         shippingMethodId: body.shippingMethodId,
-        isMultiVendor,
         currencyId: validItems[0].validatedProduct.currencyId,
       })
       .returning();
@@ -261,9 +263,73 @@ export class OrderService {
 
     await this.reduceStockForOrderItems(validItems);
 
+    const storeTotals = new Map<number, number>();
+    for (const item of orderItems) {
+      const prev = storeTotals.get(item.storeId) || 0;
+      storeTotals.set(item.storeId, prev + item.totalPrice);
+    }
+
+    const storeIdToSub = new Map<number, string>();
+    for (const item of validItems) {
+      const store = item.validatedProduct.store;
+      if (store?.subAccountCode) storeIdToSub.set(store.id, store.subAccountCode);
+    }
+
+    const amountInKobo = total * 100;
+
+    const initBody: any = {
+      email: body.email,
+      amount: amountInKobo,
+      currency: 'NGN',
+      reference: order.orderNumber,
+      metadata: {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+      },
+    };
+
+    if (uniqueStores.length === 1) {
+      const singleStoreId = uniqueStores[0];
+      const directSub = storeIdToSub.get(singleStoreId);
+      if (directSub) initBody.subaccount = directSub;
+    } else {
+      const flatSubaccounts = Array.from(storeTotals.entries())
+        .map(([storeId, amount]) => {
+          const sub = storeIdToSub.get(storeId);
+          if (!sub) return null;
+          const share = amount * 100; // flat share in kobo
+          return { subaccount: sub, share };
+        })
+        .filter(Boolean) as Array<{ subaccount: string; share: number }>;
+
+      if (flatSubaccounts.length) {
+        initBody.split = {
+          type: 'flat' as const,
+          currency: 'NGN',
+          subaccounts: flatSubaccounts,
+          bearer_type: 'account' as const,
+        };
+      }
+    }
+
+    const init = await this.paystack.initializeTransaction(initBody);
+
+    await this.db.insert(PaymentDetails).values({
+      amount: total,
+      isEscrow: true,
+      netAmount: total,
+      orderId: order.id,
+      status: 'pending',
+      paymentMethod: 'card',
+      gatewayResponse: init,
+      paymentProvider: 'paystack',
+      currencyId: order.currencyId,
+      externalReference: init.data.reference,
+    });
+
     await this.db.delete(CartItem).where(eq(CartItem.cartId, cart.id));
 
-    return {};
+    return { authorizationUrl: init.data.authorization_url, reference: init.data.reference };
   }
 
   async HandleAcceptOrderItem(itemId: number, user: TUser) {
@@ -446,130 +512,6 @@ export class OrderService {
     }
   }
 
-  async createPaymentDetails(orderId: number, body: Dto.CreatePaymentDetailsBody) {
-    const [paymentDetails] = await this.db
-      .insert(PaymentDetails)
-      .values({
-        orderId,
-        paymentProvider: body.paymentProvider,
-        paymentMethod: body.paymentMethod,
-        amount: body.amount,
-        currencyId: 1, // Assuming NGN currency ID
-        status: body.status || 'pending',
-        externalTransactionId: body.externalTransactionId,
-        externalReference: body.externalReference,
-        fees: body.fees || 0,
-        netAmount: body.netAmount,
-        isEscrow: body.isEscrow || false,
-      })
-      .returning();
-
-    return paymentDetails;
-  }
-
-  async updatePaymentStatus(paymentDetailsId: number, status: string, gatewayResponse?: any) {
-    const [updatedPayment] = await this.db
-      .update(PaymentDetails)
-      .set({
-        status: status as any,
-        gatewayResponse,
-        updatedAt: new Date(),
-      })
-      .where(eq(PaymentDetails.id, paymentDetailsId))
-      .returning();
-
-    return updatedPayment;
-  }
-
-  async releaseEscrow(paymentDetailsId: number) {
-    const [updatedPayment] = await this.db
-      .update(PaymentDetails)
-      .set({
-        escrowReleasedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(PaymentDetails.id, paymentDetailsId))
-      .returning();
-
-    return updatedPayment;
-  }
-
-  async updateOrderStatus(orderId: number, body: Dto.UpdateOrderStatusBody) {
-    const order = await this.db.query.Order.findFirst({
-      where: eq(Order.id, orderId),
-    });
-
-    if (!order) {
-      throw new NotFoundException('Order not found');
-    }
-
-    const updateData: any = {
-      status: body.status,
-      updatedAt: new Date(),
-    };
-
-    // Set appropriate timestamp based on status
-    switch (body.status) {
-      case 'confirmed':
-        updateData.confirmedAt = new Date();
-        break;
-      case 'processing':
-        updateData.processingAt = new Date();
-        break;
-      case 'shipped':
-        updateData.dispatchedAt = new Date();
-        break;
-      case 'delivered':
-        updateData.deliveredAt = new Date();
-        break;
-      case 'cancelled':
-        updateData.cancelledAt = new Date();
-        break;
-      case 'refunded':
-        updateData.refundedAt = new Date();
-        break;
-    }
-
-    const [updatedOrder] = await this.db.update(Order).set(updateData).where(eq(Order.id, orderId)).returning();
-
-    return updatedOrder;
-  }
-
-  async cancelOrder(orderId: number, userId: number) {
-    const order = await this.db.query.Order.findFirst({
-      where: eq(Order.id, orderId),
-      with: {
-        orderItems: {
-          with: {
-            product: { with: { store: true } },
-            productSize: true,
-          },
-        },
-      },
-    });
-
-    if (!order) {
-      throw new NotFoundException('Order not found');
-    }
-
-    const isBuyer = order.buyerId === userId;
-    const isStoreOwner = order.orderItems.some((item) => item.product.store.ownerId === userId);
-
-    if (!isBuyer && !isStoreOwner) {
-      throw new Error('Unauthorized to cancel this order');
-    }
-
-    const [updatedOrder] = await this.db
-      .update(Order)
-      .set({ status: 'cancelled', updatedAt: new Date() })
-      .where(eq(Order.id, orderId))
-      .returning();
-
-    await this.restoreStockForOrderItems(order.orderItems);
-
-    return updatedOrder;
-  }
-
   private async restoreStockForOrderItems(orderItems: any[]) {
     for (const item of orderItems) {
       if (item.productSizeId) {
@@ -590,314 +532,6 @@ export class OrderService {
           .where(eq(Product.id, item.productId));
       }
     }
-  }
-
-  async dispatchOrder(orderId: number, user: TUser, _body: Dto.DispatchOrderBody) {
-    const storeId = user.store?.id;
-    if (!storeId) throw new NotFoundException('store not found');
-
-    const orderItems = await this.db.query.OrderItem.findMany({
-      where: eq(OrderItem.orderId, orderId),
-      with: {
-        order: true,
-        product: { with: { store: true } },
-      },
-    });
-
-    const storeOrderItems = orderItems.filter((item) => item.product.store.id === storeId);
-
-    if (storeOrderItems.length === 0) throw new NotFoundException('no order items found for this store');
-
-    for (const item of storeOrderItems) {
-      if (!['confirmed', 'processing'].includes(item.status || '')) {
-        throw new BadRequestException(`order item ${item.id} cannot be dispatched in current status`);
-      }
-    }
-
-    for (const item of storeOrderItems) {
-      await this.db
-        .update(OrderItem)
-        .set({
-          status: 'shipped',
-          shippedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(OrderItem.id, item.id));
-    }
-
-    await this.updateOrderStatusBasedOnItems(orderId);
-
-    return { message: 'Order items dispatched successfully' };
-  }
-
-  async markAsDelivered(orderId: number, user: TUser, _body: Dto.MarkDeliveredBody) {
-    const storeId = user.store?.id;
-    if (!storeId) throw new NotFoundException('store not found');
-
-    const orderItems = await this.db.query.OrderItem.findMany({
-      where: eq(OrderItem.orderId, orderId),
-      with: {
-        order: true,
-        product: { with: { store: true } },
-      },
-    });
-
-    const storeOrderItems = orderItems.filter((item) => item.product.store.id === storeId);
-
-    if (storeOrderItems.length === 0) throw new NotFoundException('no order items found for this store');
-
-    for (const item of storeOrderItems) {
-      if (item.status !== 'shipped') {
-        throw new BadRequestException(`order item ${item.id} must be shipped before marking as delivered`);
-      }
-    }
-
-    for (const item of storeOrderItems) {
-      await this.db
-        .update(OrderItem)
-        .set({
-          status: 'delivered',
-          deliveredAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(OrderItem.id, item.id));
-    }
-
-    await this.updateOrderStatusBasedOnItems(orderId);
-
-    return { message: 'Order items marked as delivered successfully' };
-  }
-
-  async getOrderTimeline(orderId: number) {
-    const order = await this.db.query.Order.findFirst({
-      where: eq(Order.id, orderId),
-      with: {
-        paymentDetails: true,
-        shippingMethod: true,
-        currency: true,
-      },
-    });
-
-    if (!order) {
-      throw new NotFoundException('Order not found');
-    }
-
-    const timeline = [];
-
-    // Order created
-    timeline.push({
-      status: 'Order Created',
-      timestamp: order.createdAt,
-      description: `Order ${order.orderNumber} was created`,
-    });
-
-    // Order confirmed
-    if (order.confirmedAt) {
-      timeline.push({
-        status: 'Order Confirmed',
-        timestamp: order.confirmedAt,
-        description: 'Vendor accepted the order',
-      });
-    }
-
-    // Order processing
-    if (order.processingAt) {
-      timeline.push({
-        status: 'Processing',
-        timestamp: order.processingAt,
-        description: 'Order is being prepared',
-      });
-    }
-
-    // Order dispatched
-    if (order.dispatchedAt) {
-      timeline.push({
-        status: 'Dispatched',
-        timestamp: order.dispatchedAt,
-        description: 'Order has been shipped',
-      });
-    }
-
-    // Order delivered
-    if (order.deliveredAt) {
-      timeline.push({
-        status: 'Delivered',
-        timestamp: order.deliveredAt,
-        description: 'Order has been delivered',
-      });
-    }
-
-    // Order cancelled
-    if (order.cancelledAt) {
-      timeline.push({
-        status: 'Cancelled',
-        timestamp: order.cancelledAt,
-        description: 'Order was cancelled',
-      });
-    }
-
-    // Order refunded
-    if (order.refundedAt) {
-      timeline.push({
-        status: 'Refunded',
-        timestamp: order.refundedAt,
-        description: 'Order was refunded',
-      });
-    }
-
-    return {
-      order,
-      timeline: timeline.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()),
-    };
-  }
-
-  async getOrderAnalytics(storeId?: number, startDate?: Date, endDate?: Date) {
-    const conditions = [];
-
-    if (startDate && endDate) {
-      conditions.push(and(eq(Order.createdAt, startDate), eq(Order.createdAt, endDate)));
-    }
-
-    const orders = await this.db.query.Order.findMany({
-      where: conditions.length > 0 ? and(...conditions) : undefined,
-      with: {
-        paymentDetails: true,
-        currency: true,
-        orderItems: {
-          with: {
-            product: { with: { store: true } },
-          },
-        },
-      },
-    });
-
-    const filteredOrders = storeId
-      ? orders.filter((order) => order.orderItems.some((item) => item.product.store.id === storeId))
-      : orders;
-
-    let vendorRevenue = 0;
-    let vendorItemCount = 0;
-    const vendorStatusBreakdown = {
-      pending: 0,
-      confirmed: 0,
-      processing: 0,
-      shipped: 0,
-      delivered: 0,
-      cancelled: 0,
-      refunded: 0,
-    };
-
-    if (storeId) {
-      filteredOrders.forEach((order) => {
-        const vendorItems = order.orderItems.filter((item) => item.product.store.id === storeId);
-        vendorItems.forEach((item) => {
-          vendorRevenue += item.totalPrice;
-          vendorItemCount++;
-          const status = item.status || 'pending';
-          if (vendorStatusBreakdown[status] !== undefined) {
-            vendorStatusBreakdown[status]++;
-          }
-        });
-      });
-    }
-
-    const analytics = {
-      totalOrders: filteredOrders.length,
-      totalRevenue: storeId ? vendorRevenue : filteredOrders.reduce((sum, order) => sum + order.total, 0),
-      totalFees: filteredOrders.reduce(
-        (sum, order) => sum + (order.paymentDetails?.reduce((feeSum, payment) => feeSum + (payment.fees || 0), 0) || 0),
-        0,
-      ),
-      netRevenue: 0,
-      statusBreakdown: storeId
-        ? vendorStatusBreakdown
-        : {
-            pending: 0,
-            confirmed: 0,
-            processing: 0,
-            shipped: 0,
-            delivered: 0,
-            cancelled: 0,
-            refunded: 0,
-          },
-      averageOrderValue: 0,
-      completionRate: 0,
-      vendorMetrics: storeId
-        ? {
-            totalItems: vendorItemCount,
-            averageItemValue: vendorItemCount > 0 ? vendorRevenue / vendorItemCount : 0,
-          }
-        : undefined,
-    };
-
-    if (!storeId) {
-      filteredOrders.forEach((order) => {
-        if (order.status) {
-          analytics.statusBreakdown[order.status]++;
-        }
-      });
-    }
-
-    analytics.netRevenue = analytics.totalRevenue - analytics.totalFees;
-    analytics.averageOrderValue = analytics.totalOrders > 0 ? analytics.totalRevenue / analytics.totalOrders : 0;
-    const completedOrders = analytics.statusBreakdown.delivered;
-    analytics.completionRate = analytics.totalOrders > 0 ? (completedOrders / analytics.totalOrders) * 100 : 0;
-
-    return analytics;
-  }
-
-  async updateOrderItemStatus(itemId: number, user: TUser, body: Dto.UpdateOrderItemStatusBody) {
-    const storeId = user.store?.id;
-    if (!storeId) throw new NotFoundException('store not found');
-
-    const orderItem = await this.db.query.OrderItem.findFirst({
-      where: eq(OrderItem.id, itemId),
-      with: {
-        order: true,
-        product: { with: { store: true } },
-      },
-    });
-
-    if (!orderItem) throw new NotFoundException('order item not found');
-    if (orderItem.product.store.id !== storeId) {
-      throw new BadRequestException('order item does not belong to this store');
-    }
-
-    const updateData: any = {
-      status: body.status,
-      updatedAt: new Date(),
-    };
-
-    switch (body.status) {
-      case 'confirmed':
-        updateData.confirmedAt = new Date();
-        break;
-      case 'processing':
-        updateData.processingAt = new Date();
-        break;
-      case 'shipped':
-        updateData.shippedAt = new Date();
-        break;
-      case 'delivered':
-        updateData.deliveredAt = new Date();
-        break;
-      case 'cancelled':
-        updateData.cancelledAt = new Date();
-        break;
-      case 'refunded':
-        updateData.refundedAt = new Date();
-        break;
-    }
-
-    const [updatedOrderItem] = await this.db
-      .update(OrderItem)
-      .set(updateData)
-      .where(eq(OrderItem.id, itemId))
-      .returning();
-
-    await this.updateOrderStatusBasedOnItems(orderItem.order.id);
-
-    return updatedOrderItem;
   }
 
   private async updateOrderStatusBasedOnItems(orderId: number) {

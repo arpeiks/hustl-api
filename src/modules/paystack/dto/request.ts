@@ -64,3 +64,23 @@ export type TPaystackCreateSubaccountRequestBody = {
   primary_contact_email?: string;
   primary_contact_phone?: string;
 };
+
+export type TPaystackInitializeTransactionRequestBody = {
+  email: string;
+  amount: number;
+  metadata?: any;
+  currency?: string;
+  reference?: string;
+  subaccount?: string;
+  callback_url?: string;
+  split?: {
+    type: 'percentage' | 'flat';
+    currency?: string;
+    subaccounts: Array<{
+      share: number;
+      subaccount: string;
+    }>;
+    bearer_subaccount?: string;
+    bearer_type?: 'account' | 'subaccount' | 'all' | 'proportional';
+  };
+};

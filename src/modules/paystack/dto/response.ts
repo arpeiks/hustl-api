@@ -147,3 +147,9 @@ export type TPaystackSubaccount = {
   primary_contact_email: string | null;
   primary_contact_phone: string | null;
 };
+
+export type TPaystackInitializeTransactionResponse = {
+  reference: string;
+  access_code: string;
+  authorization_url: string;
+};

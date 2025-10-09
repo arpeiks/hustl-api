@@ -1,23 +1,5 @@
-import {
-  IsIn,
-  IsInt,
-  IsEmail,
-  IsString,
-  IsNumber,
-  IsBoolean,
-  IsOptional,
-  IsNotEmpty,
-  IsPhoneNumber,
-} from 'class-validator';
-
-import {
-  OrderStatusMap,
-  TOrderStatus,
-  PaymentStatusMap,
-  TPaymentStatus,
-  OrderItemStatusMap,
-  TOrderItemStatus,
-} from '@/modules/drizzle/schema';
+import { OrderStatusMap, TOrderStatus } from '@/modules/drizzle/schema';
+import { IsIn, IsInt, IsEmail, IsString, IsNumber, IsOptional, IsNotEmpty, IsPhoneNumber } from 'class-validator';
 
 export class CheckoutBody {
   @IsEmail()
@@ -37,84 +19,9 @@ export class CheckoutBody {
   @IsNotEmpty()
   shippingAddress: string;
 
-  @IsString()
-  @IsOptional()
-  billingAddress?: string;
-
-  @IsString()
-  @IsOptional()
-  notes?: string;
-
-  @IsString()
-  paymentProvider: string;
-
-  @IsString()
-  paymentMethod: string;
-
   @IsNumber()
   @IsOptional()
   shippingMethodId?: number;
-
-  @IsBoolean()
-  @IsOptional()
-  useEscrow?: boolean;
-}
-
-export class CreatePaymentDetailsBody {
-  @IsString()
-  paymentProvider: string;
-
-  @IsString()
-  paymentMethod: string;
-
-  @IsNumber()
-  amount: number;
-
-  @IsNumber()
-  @IsOptional()
-  fees?: number;
-
-  @IsNumber()
-  netAmount: number;
-
-  @IsString()
-  @IsOptional()
-  externalTransactionId?: string;
-
-  @IsString()
-  @IsOptional()
-  externalReference?: string;
-
-  @IsBoolean()
-  @IsOptional()
-  isEscrow?: boolean;
-
-  @IsString()
-  @IsOptional()
-  @IsIn(PaymentStatusMap)
-  status?: TPaymentStatus;
-}
-
-export class UpdateOrderStatusBody {
-  @IsString()
-  @IsIn(OrderStatusMap)
-  status: TOrderStatus;
-}
-
-export class DispatchOrderBody {
-  @IsString()
-  @IsOptional()
-  trackingNumber?: string;
-
-  @IsString()
-  @IsOptional()
-  carrier?: string;
-}
-
-export class MarkDeliveredBody {
-  @IsString()
-  @IsOptional()
-  deliveryNotes?: string;
 }
 
 export class GetOrderQuery {
@@ -134,14 +41,4 @@ export class GetOrderQuery {
   @IsOptional()
   @IsIn(OrderStatusMap)
   status?: TOrderStatus;
-}
-
-export class UpdateOrderItemStatusBody {
-  @IsString()
-  @IsIn(OrderItemStatusMap)
-  status: TOrderItemStatus;
-
-  @IsString()
-  @IsOptional()
-  notes?: string;
 }

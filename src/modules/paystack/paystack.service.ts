@@ -143,6 +143,19 @@ export class PaystackService {
     return this.handleError(error);
   }
 
+  async initializeTransaction(
+    body: Dto.TPaystackInitializeTransactionRequestBody,
+  ): Promise<Dto.TPaystackResponse<Dto.TPaystackInitializeTransactionResponse>> {
+    const [res, error] = await httpPost<Dto.TPaystackResponse<Dto.TPaystackInitializeTransactionResponse>>({
+      body,
+      axiosInstance: this.axios,
+      url: '/transaction/initialize',
+    });
+
+    if (res) return res;
+    return this.handleError(error);
+  }
+
   async createDedicatedAccount(
     body: Dto.TPaystackCreateDedicatedAccountRequestBody,
   ): Promise<Dto.TPaystackDedicatedAccount> {
