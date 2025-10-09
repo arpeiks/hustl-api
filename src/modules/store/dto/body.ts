@@ -1,12 +1,14 @@
 import {
+  IsIn,
   IsInt,
+  IsArray,
   IsString,
   IsNumber,
   IsBoolean,
   IsOptional,
-  IsArray,
-  ValidateNested,
+  IsNotEmpty,
   IsDateString,
+  ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -22,61 +24,6 @@ export class DayAvailabilityDto {
 
   @IsBoolean()
   active: boolean;
-}
-
-export class CreateStoreBody {
-  @IsString()
-  name: string;
-
-  @IsString()
-  @IsOptional()
-  description?: string;
-
-  @IsString()
-  @IsOptional()
-  address?: string;
-
-  @IsString()
-  @IsOptional()
-  phone?: string;
-
-  @IsBoolean()
-  @IsOptional()
-  isOnline?: boolean;
-
-  @IsArray()
-  @IsOptional()
-  @ValidateNested({ each: true })
-  @Type(() => DayAvailabilityDto)
-  availability?: DayAvailabilityDto[];
-
-  @IsBoolean()
-  @IsOptional()
-  offerDeliveryService?: boolean;
-
-  @IsNumber()
-  @IsOptional()
-  deliveryRadius?: number;
-
-  @IsNumber()
-  @IsOptional()
-  deliveryFee?: number;
-
-  @IsString()
-  @IsOptional()
-  bankName?: string;
-
-  @IsString()
-  @IsOptional()
-  accountNumber?: string;
-
-  @IsString()
-  @IsOptional()
-  accountName?: string;
-
-  @IsString()
-  @IsOptional()
-  payoutSchedule?: string;
 }
 
 export class UpdateStoreBody {
@@ -158,4 +105,23 @@ export class UpdateStoreAvailabilityBody {
   @ValidateNested({ each: true })
   @Type(() => DayAvailabilityDto)
   availability: DayAvailabilityDto[];
+}
+
+export class UpdateBankBody {
+  @IsString()
+  @IsNotEmpty()
+  bankName: string;
+
+  @IsString()
+  @IsNotEmpty()
+  bankCode: string;
+
+  @IsString()
+  @IsNotEmpty()
+  accountNumber: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @IsIn(['auto', 'weekly', 'monthly'])
+  payoutSchedule: string;
 }

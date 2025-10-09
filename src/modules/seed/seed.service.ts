@@ -391,7 +391,7 @@ export class SeedService implements OnModuleInit {
           })
           .returning();
 
-        const hashedPassword = await this.argonService.hash('password123');
+        const hashedPassword = await this.argonService.hash('Password123?');
         await this.db
           .insert(Auth)
           .values({

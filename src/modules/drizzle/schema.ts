@@ -588,6 +588,7 @@ export const Store = hustlSchema.table('store', {
   bankName: varchar(),
   accountNumber: varchar(),
   accountName: varchar(),
+  subAccountCode: varchar(),
   payoutSchedule: varchar().default('weekly'),
   ownerId: integer()
     .references(() => User.id)

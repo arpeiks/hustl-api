@@ -51,3 +51,16 @@ export type TPaystackSplitDedicatedAccountRequestBody = {
   dedicated_account_id: string;
   split_code: string;
 };
+
+export type TPaystackCreateSubaccountRequestBody = {
+  metadata?: any;
+  bank_code: string;
+  description?: string;
+  business_name: string;
+  account_number: string;
+  percentage_charge?: number;
+  settlement_schedule: string;
+  primary_contact_name?: string;
+  primary_contact_email?: string;
+  primary_contact_phone?: string;
+};

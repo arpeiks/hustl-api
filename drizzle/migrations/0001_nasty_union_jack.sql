@@ -1,0 +1,1 @@
+ALTER TABLE "hustl"."store" ADD COLUMN "sub_account_code" varchar;

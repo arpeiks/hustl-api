@@ -125,3 +125,25 @@ export type TPaystackListResponse<T> = {
     pageCount: number;
   };
 };
+
+export type TPaystackSubaccount = {
+  id: number;
+  metadata: any;
+  domain: string;
+  active: boolean;
+  currency: string;
+  createdAt: string;
+  updatedAt: string;
+  is_verified: boolean;
+  business_name: string;
+  account_number: string;
+  subaccount_code: string;
+  settlement_bank: string;
+  percentage_charge: number;
+  description: string | null;
+  settlement_bank_code: string;
+  settlement_schedule: string | null;
+  primary_contact_name: string | null;
+  primary_contact_email: string | null;
+  primary_contact_phone: string | null;
+};

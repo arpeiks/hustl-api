@@ -6,6 +6,7 @@ import { AppController } from './app.controller';
 import { AuthModule } from '../auth/auth.module';
 import { CartModule } from '../cart/cart.module';
 import { SeedModule } from '../seed/seed.module';
+import { BankModule } from '../bank/bank.module';
 import { CacheModule } from '../cache/cache.module';
 import { OrderModule } from '../order/order.module';
 import { StoreModule } from '../store/store.module';
@@ -26,6 +27,7 @@ import { NotificationModule } from '../notification/notification.module';
     AuthModule,
     CartModule,
     SeedModule,
+    BankModule,
     CacheModule,
     OrderModule,
     StoreModule,

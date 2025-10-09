@@ -4,33 +4,15 @@ import { TDatabase } from '@/types';
 import { Store, TUser } from '../drizzle/schema';
 import { generatePagination, getPage } from '@/utils';
 import { eq, and, desc, count, or, ilike } from 'drizzle-orm';
+import { PaystackService } from '../paystack/paystack.service';
 import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 
 @Injectable()
 export class StoreService {
-  constructor(@Inject(DATABASE) private readonly db: TDatabase) {}
-
-  async createStore(user: TUser, body: Dto.CreateStoreBody) {
-    const ownerId = user.id;
-    const existingStore = await this.db.query.Store.findFirst({ where: eq(Store.ownerId, ownerId) });
-
-    if (existingStore) {
-      const [updatedStore] = await this.db
-        .update(Store)
-        .set({ ...body, deletedAt: null, updatedAt: new Date() })
-        .where(eq(Store.id, existingStore.id))
-        .returning();
-
-      return updatedStore;
-    }
-
-    const [store] = await this.db
-      .insert(Store)
-      .values({ ...body, ownerId })
-      .returning();
-
-    return store;
-  }
+  constructor(
+    private readonly paystack: PaystackService,
+    @Inject(DATABASE) private readonly db: TDatabase,
+  ) {}
 
   async getStores(query: Dto.GetStoreQuery) {
     const { limit, offset } = getPage(query);
@@ -62,15 +44,87 @@ export class StoreService {
     return store;
   }
 
-  async updateStore(storeId: number, body: Dto.UpdateStoreBody) {
-    const [store] = await this.db
+  async updateStore(storeId: number, user: TUser, body: Dto.UpdateStoreBody) {
+    let store = await this.db.query.Store.findFirst({
+      where: and(eq(Store.id, storeId), eq(Store.ownerId, user.id)),
+    });
+
+    if (!store) throw new NotFoundException('store not found');
+
+    [store] = await this.db
       .update(Store)
       .set({ ...body, updatedAt: new Date() })
       .where(eq(Store.id, storeId))
       .returning();
 
-    if (!store) throw new NotFoundException('store not found');
+    if (store.subAccountCode) {
+      await this.paystack.updateSubaccount(store.subAccountCode, {
+        business_name: store.name,
+        primary_contact_email: user.email,
+        primary_contact_phone: user.phone,
+        primary_contact_name: user.fullName,
+        description: store.description || '',
+        settlement_schedule: store.payoutSchedule || 'auto',
+      });
+    }
 
     return store;
+  }
+
+  async updateBank(storeId: number, user: TUser, body: Dto.UpdateBankBody) {
+    const store = await this.db.query.Store.findFirst({
+      where: and(eq(Store.id, storeId), eq(Store.ownerId, user.id)),
+    });
+
+    if (!store?.id) throw new NotFoundException('store not found');
+
+    const resolved = await this.paystack.resolveAccountNumber({
+      bank_code: '001',
+      account_number: body.accountNumber,
+    });
+
+    // Sample object for resolved based on its type (TPaystackResolveAccountResponse)
+    // const resolved = {
+    //   account_number: '1234567890',
+    //   account_name: 'John Doe',
+    //   bank_id: 1,
+    //   bank_code: body.bankCode,
+    //   bank_name: body.bankName || 'Sample Bank',
+    // };
+
+    if (!store.subAccountCode) {
+      const subaccount = await this.paystack.createSubaccount({
+        percentage_charge: 0.0,
+        bank_code: body.bankCode,
+        business_name: store.name,
+        primary_contact_email: user.email,
+        primary_contact_phone: user.phone,
+        primary_contact_name: user.fullName,
+        description: store.description || '',
+        account_number: resolved.account_number,
+        settlement_schedule: body.payoutSchedule,
+      });
+
+      await this.db
+        .update(Store)
+        .set({
+          bankName: body.bankName,
+          accountName: resolved.account_name,
+          payoutSchedule: body.payoutSchedule,
+          accountNumber: resolved.account_number,
+          subAccountCode: subaccount.subaccount_code,
+        })
+        .where(eq(Store.id, store.id));
+
+      return {};
+    }
+
+    await this.paystack.updateSubaccount(store.subAccountCode, {
+      bank_code: body.bankCode,
+      account_number: resolved.account_number,
+      settlement_schedule: body.payoutSchedule || 'auto',
+    });
+
+    return {};
   }
 }

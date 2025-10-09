@@ -96,3 +96,11 @@ export const calculateIntervalDate = (intervalUnit: string, interval: number) =>
 export const getPaystackAuthorizationHeader = (secretKey: string): string => {
   return `Bearer ${secretKey}`;
 };
+
+export function sanitizeContact(input: string): string {
+  if (typeof input !== 'string') return input;
+  if (input.includes('@')) {
+    return input.split('@')[0];
+  }
+  return input.replace(/\D+/g, '');
+}

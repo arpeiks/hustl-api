@@ -31,6 +31,31 @@ export class PaystackService {
     return this.handleError(error);
   }
 
+  async createSubaccount(body: Dto.TPaystackCreateSubaccountRequestBody): Promise<Dto.TPaystackSubaccount> {
+    const [res, error] = await httpPost<Dto.TPaystackResponse<Dto.TPaystackSubaccount>>({
+      body,
+      url: '/subaccount',
+      axiosInstance: this.axios,
+    });
+
+    if (res) return res.data;
+    return this.handleError(error);
+  }
+
+  async updateSubaccount(
+    subaccountIdOrCode: string,
+    body: Partial<Dto.TPaystackCreateSubaccountRequestBody>,
+  ): Promise<Dto.TPaystackSubaccount> {
+    const [res, error] = await httpPut<Dto.TPaystackResponse<Dto.TPaystackSubaccount>>({
+      body,
+      axiosInstance: this.axios,
+      url: `/subaccount/${subaccountIdOrCode}`,
+    });
+
+    if (res) return res.data;
+    return this.handleError(error);
+  }
+
   async createTransfer(body: Dto.TPaystackCreateTransferRequestBody): Promise<Dto.TPaystackTransfer> {
     const [res, error] = await httpPost<Dto.TPaystackResponse<Dto.TPaystackTransfer>>({
       axiosInstance: this.axios,
