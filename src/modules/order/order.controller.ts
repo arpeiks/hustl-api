@@ -37,6 +37,14 @@ export class OrderController {
 
   @Auth()
   @Version(VERSION_ONE)
+  @Put('/item/:id/delivered')
+  async HandleMarkItemDelivered(@Param('id') id: number, @ReqUser() user: TUser) {
+    const data = await this.orderService.HandleMarkItemDelivered(id, user);
+    return { data, message: RESPONSE.SUCCESS };
+  }
+
+  @Auth()
+  @Version(VERSION_ONE)
   @Put('/:id/store/accept')
   async HandleAcceptOrder(@Param('id') itemId: number, @ReqUser() user: TUser) {
     const data = await this.orderService.HandleAcceptOrder(itemId, user);
@@ -72,6 +80,14 @@ export class OrderController {
   @Get('/:id/store')
   async HandleGetStoreOrderById(@ReqUser() user: TUser, @Param('id') id: number) {
     const data = await this.orderService.HandleGetStoreOrderById(id, user);
+    return { data, message: RESPONSE.SUCCESS };
+  }
+
+  @Auth()
+  @Version(VERSION_ONE)
+  @Put('/:id/delivered')
+  async HandleMarkOrderDelivered(@Param('id') id: number, @ReqUser() user: TUser) {
+    const data = await this.orderService.HandleMarkOrderDelivered(id, user);
     return { data, message: RESPONSE.SUCCESS };
   }
 
@@ -112,22 +128,6 @@ export class OrderController {
   @Version(VERSION_ONE)
   async HandleGetMyOrders(@ReqUser() user: TUser, @Query() query: Dto.GetOrderQuery) {
     const data = await this.orderService.HandleGetMyOrders(user, query);
-    return { data, message: RESPONSE.SUCCESS };
-  }
-
-  @Auth()
-  @Version(VERSION_ONE)
-  @Put('/item/:id/delivered')
-  async HandleMarkItemDelivered(@Param('id') id: number, @ReqUser() user: TUser) {
-    const data = await this.orderService.HandleMarkItemDelivered(id, user);
-    return { data, message: RESPONSE.SUCCESS };
-  }
-
-  @Auth()
-  @Version(VERSION_ONE)
-  @Put('/:id/delivered')
-  async HandleMarkOrderDelivered(@Param('id') id: number, @ReqUser() user: TUser) {
-    const data = await this.orderService.HandleMarkOrderDelivered(id, user);
     return { data, message: RESPONSE.SUCCESS };
   }
 }

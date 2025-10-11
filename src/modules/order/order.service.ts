@@ -684,15 +684,16 @@ export class OrderService {
   }
 
   async HandleMarkItemDelivered(itemId: number, user: TUser) {
-    const storeId = user.store?.id;
-    if (!storeId) throw new NotFoundException('store not found');
-
     const orderItem = await this.db.query.OrderItem.findFirst({
+      where: eq(OrderItem.id, itemId),
       with: { order: true, product: { with: { store: true } } },
-      where: and(eq(OrderItem.id, itemId), eq(OrderItem.storeId, storeId)),
     });
 
     if (!orderItem) throw new NotFoundException('order item not found');
+
+    if (orderItem.order.buyerId !== user.id) {
+      throw new NotFoundException('order item not found or you are not the buyer');
+    }
 
     if (orderItem.status !== 'shipped') {
       throw new BadRequestException('order item must be shipped before it can be marked as delivered');
@@ -710,15 +711,16 @@ export class OrderService {
   }
 
   async HandleMarkOrderDelivered(orderId: number, user: TUser) {
-    const storeId = user.store?.id;
-    if (!storeId) throw new NotFoundException('store not found');
-
-    let orderItems = await this.db.query.OrderItem.findMany({
-      with: { order: true, product: { with: { store: true } } },
-      where: and(eq(OrderItem.orderId, orderId), eq(OrderItem.storeId, storeId)),
+    const order = await this.db.query.Order.findFirst({
+      with: { orderItems: true },
+      where: and(eq(Order.id, orderId), eq(Order.buyerId, user.id)),
     });
 
-    if (orderItems.length === 0) throw new NotFoundException('no order items found for this store');
+    if (!order) throw new NotFoundException('order not found or you are not the buyer');
+
+    let orderItems = order.orderItems;
+
+    if (orderItems.length === 0) throw new NotFoundException('no order items found for this order');
 
     orderItems = orderItems.filter((item) => item.status === 'shipped');
 
