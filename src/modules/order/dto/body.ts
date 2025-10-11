@@ -42,3 +42,15 @@ export class GetOrderQuery {
   @IsIn(OrderStatusMap)
   status?: TOrderStatus;
 }
+
+export class MarkItemDeliveredBody {
+  @IsInt()
+  @IsNotEmpty()
+  orderItemId: number;
+}
+
+export class MarkOrderDeliveredBody {
+  @IsInt()
+  @IsNotEmpty()
+  orderId: number;
+}

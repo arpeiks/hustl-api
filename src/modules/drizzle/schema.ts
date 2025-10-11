@@ -415,6 +415,8 @@ export const Order = hustlSchema.table('order', {
   deliveredAt: timestamp(tzConfig),
   cancelledAt: timestamp(tzConfig),
   refundedAt: timestamp(tzConfig),
+  authorizationUrl: varchar(),
+  authorizationReference: varchar(),
   ...timestamps,
 });
 

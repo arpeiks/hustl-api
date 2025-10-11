@@ -15,6 +15,13 @@
       "when": 1760001654912,
       "tag": "0001_nasty_union_jack",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1760171266061,
+      "tag": "0002_supreme_scream",
+      "breakpoints": true
     }
   ]
 }

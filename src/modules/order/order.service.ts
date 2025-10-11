@@ -275,7 +275,7 @@ export class OrderService {
       if (store?.subAccountCode) storeIdToSub.set(store.id, store.subAccountCode);
     }
 
-    const amountInKobo = total * 100;
+    const amountInKobo = total;
 
     const initBody: any = {
       email: body.email,
@@ -297,7 +297,7 @@ export class OrderService {
         .map(([storeId, amount]) => {
           const sub = storeIdToSub.get(storeId);
           if (!sub) return null;
-          const share = amount * 100; // flat share in kobo
+          const share = amount;
           return { subaccount: sub, share };
         })
         .filter(Boolean) as Array<{ subaccount: string; share: number }>;
@@ -329,7 +329,38 @@ export class OrderService {
 
     await this.db.delete(CartItem).where(eq(CartItem.cartId, cart.id));
 
+    await this.db
+      .update(Order)
+      .set({ authorizationReference: init.data.reference, authorizationUrl: init.data.authorization_url })
+      .where(eq(Order.id, order.id));
+
     return { authorizationUrl: init.data.authorization_url, reference: init.data.reference };
+  }
+
+  async HandleDispatchOrderItem(itemId: number, user: TUser) {
+    const storeId = user.store?.id;
+    if (!storeId) throw new NotFoundException('store not found');
+
+    const orderItem = await this.db.query.OrderItem.findFirst({
+      with: { order: true, product: { with: { store: true } } },
+      where: and(eq(OrderItem.id, itemId), eq(OrderItem.storeId, storeId)),
+    });
+
+    if (!orderItem) throw new NotFoundException('order item not found');
+
+    if (orderItem.status !== 'pending') {
+      throw new BadRequestException('order item cannot be accepted in current status');
+    }
+
+    await this.db
+      .update(OrderItem)
+      .set({ status: 'shipped', updatedAt: new Date(), shippedAt: new Date() })
+      .where(eq(OrderItem.id, itemId))
+      .returning();
+
+    await this.updateOrderStatusBasedOnItems(orderItem.order.id);
+
+    return {};
   }
 
   async HandleAcceptOrderItem(itemId: number, user: TUser) {
@@ -385,6 +416,36 @@ export class OrderService {
           status: 'confirmed',
           confirmedAt: new Date(),
           updatedAt: new Date(),
+        })
+        .where(eq(OrderItem.id, item.id));
+    }
+
+    await this.updateOrderStatusBasedOnItems(orderId);
+
+    return {};
+  }
+
+  async HandleDispatchOrder(orderId: number, user: TUser) {
+    const storeId = user.store?.id;
+    if (!storeId) throw new NotFoundException('store not found');
+
+    let orderItems = await this.db.query.OrderItem.findMany({
+      where: and(eq(OrderItem.orderId, orderId), eq(OrderItem.storeId, storeId)),
+      with: {
+        order: true,
+        product: { with: { store: true } },
+      },
+    });
+
+    if (orderItems.length === 0) throw new NotFoundException('no order items found for this store');
+
+    for (const item of orderItems) {
+      await this.db
+        .update(OrderItem)
+        .set({
+          status: 'shipped',
+          shippedAt: new Date(),
+          confirmedAt: new Date(),
         })
         .where(eq(OrderItem.id, item.id));
     }
@@ -620,5 +681,58 @@ export class OrderService {
         })
         .where(eq(Product.id, orderItem.productId));
     }
+  }
+
+  async HandleMarkItemDelivered(itemId: number, user: TUser) {
+    const storeId = user.store?.id;
+    if (!storeId) throw new NotFoundException('store not found');
+
+    const orderItem = await this.db.query.OrderItem.findFirst({
+      with: { order: true, product: { with: { store: true } } },
+      where: and(eq(OrderItem.id, itemId), eq(OrderItem.storeId, storeId)),
+    });
+
+    if (!orderItem) throw new NotFoundException('order item not found');
+
+    if (orderItem.status !== 'shipped') {
+      throw new BadRequestException('order item must be shipped before it can be marked as delivered');
+    }
+
+    await this.db
+      .update(OrderItem)
+      .set({ status: 'delivered', updatedAt: new Date(), deliveredAt: new Date() })
+      .where(eq(OrderItem.id, itemId))
+      .returning();
+
+    await this.updateOrderStatusBasedOnItems(orderItem.order.id);
+
+    return {};
+  }
+
+  async HandleMarkOrderDelivered(orderId: number, user: TUser) {
+    const storeId = user.store?.id;
+    if (!storeId) throw new NotFoundException('store not found');
+
+    let orderItems = await this.db.query.OrderItem.findMany({
+      with: { order: true, product: { with: { store: true } } },
+      where: and(eq(OrderItem.orderId, orderId), eq(OrderItem.storeId, storeId)),
+    });
+
+    if (orderItems.length === 0) throw new NotFoundException('no order items found for this store');
+
+    orderItems = orderItems.filter((item) => item.status === 'shipped');
+
+    if (orderItems.length === 0) throw new BadRequestException('no shipped items found to mark as delivered');
+
+    for (const item of orderItems) {
+      await this.db
+        .update(OrderItem)
+        .set({ status: 'delivered', updatedAt: new Date(), deliveredAt: new Date() })
+        .where(eq(OrderItem.id, item.id));
+    }
+
+    await this.updateOrderStatusBasedOnItems(orderId);
+
+    return {};
   }
 }
