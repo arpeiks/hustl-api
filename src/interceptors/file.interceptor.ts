@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import * as path from 'path';
 import * as multer from 'multer';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
@@ -17,9 +18,16 @@ const createFileUploadInterceptor = (options: FileUploadOptions = {}) => {
     allowedMimeTypes = ['image/'],
   } = options;
 
+  const ensureDir = (dir: string) => {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+  };
+
   return FileInterceptor(fieldName, {
     storage: multer.diskStorage({
       destination: (_req, _file, cb) => {
+        ensureDir(destination);
         cb(null, destination);
       },
       filename: (_req, file, cb) => {
@@ -63,7 +71,11 @@ export const DocumentInterceptor = createFileUploadInterceptor({
 export const MultiImageInterceptor = FilesInterceptor('files', 10, {
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => {
-      cb(null, 'uploads/');
+      const dir = 'uploads/';
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      cb(null, dir);
     },
     filename: (_req, file, cb) => {
       const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);

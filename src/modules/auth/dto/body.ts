@@ -102,6 +102,22 @@ export class ResetPasswordBody {
 export class UpdateProfileBody {
   @IsString()
   @IsOptional()
+  bio?: string;
+
+  @IsString()
+  @IsOptional()
+  address?: string;
+
+  @IsString()
+  @IsOptional()
+  city?: string;
+
+  @IsString()
+  @IsOptional()
+  state?: string;
+
+  @IsString()
+  @IsOptional()
   fullName?: string;
 
   @IsEmail()
