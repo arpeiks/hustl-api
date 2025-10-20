@@ -149,19 +149,12 @@ export class ProductService {
       body.currencyId = currency.id;
     }
 
-    let images = body.images;
+    let images = body.images || product.images || [];
     if (files && files.length > 0) {
       const uploadPromises = files.map((file) => this.cloudinaryService.upload(file, 'product-images'));
       const imageUrls = await Promise.all(uploadPromises);
-      images = imageUrls.filter((url) => url !== null) as string[];
-    }
-
-    if (files && files.length > 0) {
-      const imageUrl = await this.cloudinaryService.upload(files[0], 'product-images');
-      if (imageUrl) {
-        const currentImages = product.images || [];
-        images = [...currentImages, imageUrl];
-      }
+      const newImageUrls = imageUrls.filter((url) => url !== null) as string[];
+      images = [...images, ...newImageUrls];
     }
 
     const [updatedProduct] = await this.db

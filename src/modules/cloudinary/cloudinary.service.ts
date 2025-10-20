@@ -23,8 +23,13 @@ export class CloudinaryService {
       resource_type: 'auto',
     });
 
-    for (const file of await fs.readdir('uploads')) {
-      go(async () => await fs.unlink(path.join('uploads', file)));
+    try {
+      const files = await fs.readdir('uploads');
+      for (const file of files) {
+        go(async () => await fs.unlink(path.join('uploads', file)));
+      }
+    } catch (error) {
+      // Directory doesn't exist or is empty, ignore
     }
 
     return res.url || undefined;
