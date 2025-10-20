@@ -12,6 +12,30 @@ export class StoreController {
   constructor(private readonly storeService: StoreService) {}
 
   @Auth()
+  @Get(':id/earnings')
+  @Version(VERSION_ONE)
+  async getDashboardStats(@Param('id') id: number) {
+    const data = await this.storeService.getDashboardStats(id);
+    return { data, message: RESPONSE.SUCCESS };
+  }
+
+  @Auth()
+  @Get(':id/stats')
+  @Version(VERSION_ONE)
+  async getQuickStats(@Param('id') id: number) {
+    const data = await this.storeService.getQuickStats(id);
+    return { data, message: RESPONSE.SUCCESS };
+  }
+
+  @Auth()
+  @Version(VERSION_ONE)
+  @Get(':id/activities')
+  async getRecentActivities(@Param('id') id: number) {
+    const data = await this.storeService.getRecentActivities(id);
+    return { data, message: RESPONSE.SUCCESS };
+  }
+
+  @Auth()
   @Put(':id/bank')
   @Version(VERSION_ONE)
   async updateBank(@ReqUser() user: TUser, @Param('id') id: number, @Body() body: Dto.UpdateBankBody) {
