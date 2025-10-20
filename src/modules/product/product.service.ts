@@ -16,6 +16,7 @@ import { TDatabase } from '@/types';
 import { generatePagination, getPage } from '@/utils';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { eq, and, desc, count, or, ilike, isNull } from 'drizzle-orm';
+import { NotificationService } from '../notification/notification.service';
 import { Injectable, Inject, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 
 @Injectable()
@@ -23,6 +24,7 @@ export class ProductService {
   constructor(
     @Inject(DATABASE) private readonly db: TDatabase,
     private readonly cloudinaryService: CloudinaryService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async createProduct(user: TUser, body: Dto.CreateProductBody, files?: Express.Multer.File[]) {
@@ -224,6 +226,13 @@ export class ProductService {
       .values({ ...body, userId: user.id, productId: product.id, isVerified: true })
       .returning();
 
+    const store = await this.db.query.Store.findFirst({
+      with: { owner: true },
+      where: eq(Product.storeId, product.storeId),
+    });
+
+    if (store) await this.notificationService.notifyProductReview(product, review, store.owner.id);
+
     return review;
   }
 
@@ -274,5 +283,19 @@ export class ProductService {
       .slice(0, 3);
 
     return `${storePrefix}-${namePrefix}-${timestamp}`;
+  }
+
+  async checkLowStockAlert(productId: number) {
+    const product = await this.db.query.Product.findFirst({
+      where: eq(Product.id, productId),
+      with: { store: { with: { owner: true } } },
+    });
+
+    if (!product) return;
+
+    const LOW_STOCK_THRESHOLD = 5;
+    if (product.stockQuantity <= LOW_STOCK_THRESHOLD && product.stockQuantity > 0) {
+      await this.notificationService.notifyLowStock(product, product.store.owner.id);
+    }
   }
 }

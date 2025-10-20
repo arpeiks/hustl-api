@@ -13,15 +13,19 @@ import * as Dto from './dto';
 import { DATABASE } from '@/consts';
 import { TDatabase } from '@/types';
 import { generatePagination, getPage } from '@/utils';
+import { ProductService } from '@/modules/product/product.service';
 import { PaystackService } from '@/modules/paystack/paystack.service';
 import { eq, and, desc, count, countDistinct, ilike } from 'drizzle-orm';
+import { NotificationService } from '@/modules/notification/notification.service';
 import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
 
 @Injectable()
 export class OrderService {
   constructor(
-    @Inject(DATABASE) private readonly db: TDatabase,
     private readonly paystack: PaystackService,
+    @Inject(DATABASE) private readonly db: TDatabase,
+    private readonly productService: ProductService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async HandleGetStoreOrderItems(user: TUser, query: Dto.GetOrderQuery) {
@@ -263,6 +267,10 @@ export class OrderService {
 
     await this.reduceStockForOrderItems(validItems);
 
+    for (const item of validItems) {
+      await this.productService.checkLowStockAlert(item.productId);
+    }
+
     const storeTotals = new Map<number, number>();
     for (const item of orderItems) {
       const prev = storeTotals.get(item.storeId) || 0;
@@ -334,6 +342,15 @@ export class OrderService {
       .set({ authorizationReference: init.data.reference, authorizationUrl: init.data.authorization_url })
       .where(eq(Order.id, order.id));
 
+    const orderWithItems = await this.db.query.Order.findFirst({
+      with: { orderItems: true },
+      where: eq(Order.id, order.id),
+    });
+
+    if (orderWithItems) {
+      await this.notificationService.notifyOrderPlaced(orderWithItems);
+    }
+
     return { authorizationUrl: init.data.authorization_url, reference: init.data.reference };
   }
 
@@ -352,6 +369,7 @@ export class OrderService {
       throw new BadRequestException('order item cannot be accepted in current status');
     }
 
+    const oldStatus = orderItem.status;
     await this.db
       .update(OrderItem)
       .set({ status: 'shipped', updatedAt: new Date(), shippedAt: new Date() })
@@ -359,6 +377,15 @@ export class OrderService {
       .returning();
 
     await this.updateOrderStatusBasedOnItems(orderItem.order.id);
+
+    const updatedOrderItem = await this.db.query.OrderItem.findFirst({
+      where: eq(OrderItem.id, itemId),
+      with: { order: true, product: true },
+    });
+
+    if (updatedOrderItem) {
+      await this.notificationService.notifyOrderItemStatusChange(updatedOrderItem, oldStatus, 'shipped');
+    }
 
     return {};
   }
@@ -378,6 +405,7 @@ export class OrderService {
       throw new BadRequestException('order item cannot be accepted in current status');
     }
 
+    const oldStatus = orderItem.status;
     await this.db
       .update(OrderItem)
       .set({
@@ -389,6 +417,15 @@ export class OrderService {
       .returning();
 
     await this.updateOrderStatusBasedOnItems(orderItem.order.id);
+
+    const updatedOrderItem = await this.db.query.OrderItem.findFirst({
+      where: eq(OrderItem.id, itemId),
+      with: { order: true, product: true },
+    });
+
+    if (updatedOrderItem) {
+      await this.notificationService.notifyOrderItemStatusChange(updatedOrderItem, oldStatus, 'confirmed');
+    }
 
     return {};
   }
@@ -468,6 +505,7 @@ export class OrderService {
       throw new BadRequestException('order item cannot be cancelled in current status');
     }
 
+    const oldStatus = orderItem.status;
     await this.db
       .update(OrderItem)
       .set({ status: 'cancelled', updatedAt: new Date(), cancelledAt: new Date() })
@@ -476,6 +514,15 @@ export class OrderService {
 
     await this.restoreStockForOrderItem(orderItem);
     await this.updateOrderStatusBasedOnItems(orderItem.orderId);
+
+    const updatedOrderItem = await this.db.query.OrderItem.findFirst({
+      where: eq(OrderItem.id, itemId),
+      with: { order: true, product: true },
+    });
+
+    if (updatedOrderItem) {
+      await this.notificationService.notifyOrderItemStatusChange(updatedOrderItem, oldStatus || 'pending', 'cancelled');
+    }
 
     return {};
   }
@@ -699,6 +746,7 @@ export class OrderService {
       throw new BadRequestException('order item must be shipped before it can be marked as delivered');
     }
 
+    const oldStatus = orderItem.status;
     await this.db
       .update(OrderItem)
       .set({ status: 'delivered', updatedAt: new Date(), deliveredAt: new Date() })
@@ -706,6 +754,15 @@ export class OrderService {
       .returning();
 
     await this.updateOrderStatusBasedOnItems(orderItem.order.id);
+
+    const updatedOrderItem = await this.db.query.OrderItem.findFirst({
+      where: eq(OrderItem.id, itemId),
+      with: { order: true, product: true },
+    });
+
+    if (updatedOrderItem) {
+      await this.notificationService.notifyOrderItemStatusChange(updatedOrderItem, oldStatus, 'delivered');
+    }
 
     return {};
   }

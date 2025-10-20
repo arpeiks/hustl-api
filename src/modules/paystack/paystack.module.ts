@@ -4,6 +4,9 @@ import * as Utils from '@/utils';
 import { ConfigService } from '@nestjs/config';
 import { Global, Module } from '@nestjs/common';
 import { PaystackService } from './paystack.service';
+import { PaystackWebhookService } from './webhook.service';
+import { PaystackWebhookController } from './webhook.controller';
+import { NotificationModule } from '../notification/notification.module';
 
 const PaystackAxios = {
   inject: [ConfigService],
@@ -22,6 +25,8 @@ const PaystackAxios = {
 @Global()
 @Module({
   exports: [PaystackService],
-  providers: [PaystackService, PaystackAxios],
+  imports: [NotificationModule],
+  controllers: [PaystackWebhookController],
+  providers: [PaystackService, PaystackWebhookService, PaystackAxios],
 })
 export class PaystackModule {}

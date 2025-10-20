@@ -12,6 +12,22 @@ export class NotificationController {
   constructor(private readonly notificationService: NotificationService) {}
 
   @Auth()
+  @Put(':id/read')
+  @Version(VERSION_ONE)
+  async markAsRead(@ReqUser() user: TUser, @Param('id') id: number) {
+    const data = await this.notificationService.markAsRead(user, id);
+    return { data, message: RESPONSE.SUCCESS };
+  }
+
+  @Auth()
+  @Put('read-all')
+  @Version(VERSION_ONE)
+  async markAllAsRead(@ReqUser() user: TUser) {
+    const data = await this.notificationService.markAllAsRead(user);
+    return { data, message: RESPONSE.SUCCESS };
+  }
+
+  @Auth()
   @Get('settings')
   @Version(VERSION_ONE)
   async getNotificationSettings(@ReqUser() user: TUser) {
@@ -35,8 +51,8 @@ export class NotificationController {
     return { data, message: RESPONSE.SUCCESS };
   }
 
-  @Auth()
   @Get()
+  @Auth()
   @Version(VERSION_ONE)
   async getNotifications(@ReqUser() user: TUser) {
     const data = await this.notificationService.getNotifications(user);
