@@ -1,0 +1,1 @@
+ALTER TABLE "hustl"."auth" ADD COLUMN "push_token" varchar;

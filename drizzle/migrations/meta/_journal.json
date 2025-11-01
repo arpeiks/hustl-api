@@ -22,6 +22,13 @@
       "when": 1760171266061,
       "tag": "0002_supreme_scream",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1761994071712,
+      "tag": "0003_flippant_madame_masque",
+      "breakpoints": true
     }
   ]
 }
