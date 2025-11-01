@@ -1,0 +1,42 @@
+name: CI/CD
+
+on:
+  push:
+    branches: ['main']
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to AWS EC2
+        env:
+          EC2_SSH_HOST: ${{ secrets.EC2_SSH_HOST }}
+          EC2_SSH_USER: ${{ secrets.EC2_SSH_USER }}
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          REPO_URL: ${{ secrets.REPO_URL }}
+          APP_ENV: ${{ secrets.APP_ENV }}
+        run: |
+          echo "$APP_ENV" > .hustl.env
+          echo "$EC2_SSH_PRIVATE_KEY" > private_key.pem
+          chmod 400 private_key.pem
+
+          echo "📤 Copying deploy script to EC2"
+          scp -o StrictHostKeyChecking=no -i private_key.pem .scripts/deploy.sh "$EC2_SSH_USER@$EC2_SSH_HOST":~/deploy.sh
+          scp -o StrictHostKeyChecking=no -i private_key.pem .hustl.env "$EC2_SSH_USER@$EC2_SSH_HOST":~/.hustl.env
+          ssh -o StrictHostKeyChecking=no -i private_key.pem "$EC2_SSH_USER@$EC2_SSH_HOST" "chmod +x ~/deploy.sh"
+
+          echo "🚀 Running deploy script"
+          ssh -o StrictHostKeyChecking=no -i private_key.pem "$EC2_SSH_USER@$EC2_SSH_HOST" << EOF
+           export REPO_URL="${REPO_URL}"
+           bash -l ~/deploy.sh
+           rm -f ~/deploy.sh
+           rm -f ~/.hustl.env
+          EOF
+
+      - name: Clean up
+        run: |
+          rm -f .hustl.env
+          rm -f private_key.pem
