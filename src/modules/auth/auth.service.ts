@@ -64,9 +64,9 @@ export class AuthService {
       await tx.insert(Cart).values({ userId: user.id });
       const token = this.token.generateAccessToken({ sub: user.id });
       await tx.insert(NotificationSetting).values({ userId: user.id });
-      await tx.insert(Auth).values({ userId: user.id, token, password: hashedPassword });
       await tx.insert(Store).values({ ownerId: user.id, name: user.fullName || email || phone });
       await tx.insert(Otp).values({ code, identifier: body.phone, type: 'PHONE_VERIFICATION', expiredAt });
+      await tx.insert(Auth).values({ userId: user.id, token, password: hashedPassword, pushToken: body.pushToken });
       for (const currency of currencies) await tx.insert(Wallet).values({ userId: user.id, currencyId: currency.id });
 
       return { ...user, token };
@@ -131,7 +131,10 @@ export class AuthService {
 
     const token = this.token.generateAccessToken({ sub: user.id });
 
-    await this.provider.update(Auth).set({ token, updatedAt: new Date() }).where(eq(Auth.userId, user.id));
+    await this.provider
+      .update(Auth)
+      .set({ token, updatedAt: new Date(), pushToken: body.pushToken || user.auth.pushToken })
+      .where(eq(Auth.userId, user.id));
 
     return { ...user, auth: undefined, token };
   }

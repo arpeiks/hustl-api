@@ -13,6 +13,9 @@ export class CreateAccountBody {
   phone: string;
 
   @IsString()
+  pushToken: string;
+
+  @IsString()
   @HasNumber()
   @MinLength(8)
   @HasLowerCase()
@@ -26,6 +29,9 @@ export class LoginBody {
   @IsNotEmpty()
   @IsPhoneNumber()
   phone: string;
+
+  @IsString()
+  pushToken: string;
 
   @IsString()
   @HasNumber()

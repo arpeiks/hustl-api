@@ -151,6 +151,7 @@ export const Auth = hustlSchema.table('auth', {
     .unique(),
   password: text().notNull(),
   token: text(),
+  pushToken: varchar(),
   ...timestamps,
 });
 

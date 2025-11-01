@@ -2,6 +2,7 @@ import * as Dto from './dto';
 import { DATABASE } from '@/consts';
 import { TDatabase } from '@/types';
 import { eq, and, desc } from 'drizzle-orm';
+import { ExpoService } from './expo.service';
 import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 import { NotificationSetting, Notification, TUser, Order, Store, Product } from '../drizzle/schema';
 
@@ -26,7 +27,10 @@ export enum NotificationType {
 
 @Injectable()
 export class NotificationService {
-  constructor(@Inject(DATABASE) private readonly db: TDatabase) {}
+  constructor(
+    @Inject(DATABASE) private readonly db: TDatabase,
+    private readonly expo: ExpoService,
+  ) {}
 
   async getNotificationSettings(user: TUser) {
     return await this.db.query.NotificationSetting.findFirst({
@@ -108,6 +112,13 @@ export class NotificationService {
       `Your order #${order.orderNumber} has been placed successfully. Total: ₦${(order.total / 100).toFixed(2)}`,
     );
 
+    await this.expo.sendPushNotification(order.buyer.auth.pushToken, {
+      data: buyerNotification,
+      to: order.buyer.auth.pushToken,
+      title: 'Order Placed Successfully',
+      body: `Your order #${order.orderNumber} has been placed successfully. Total: ₦${(order.total / 100).toFixed(2)}`,
+    });
+
     const storeOwners = new Map<number, any>();
 
     for (const item of order.orderItems) {
@@ -123,12 +134,19 @@ export class NotificationService {
     }
 
     for (const [_storeId, store] of storeOwners) {
-      await this.createNotification(
+      const storeOwnerNotification = await this.createNotification(
         store.owner.id,
         NotificationType.NEW_ORDER_FOR_STORE,
         'New Order Received',
         `You have received a new order #${order.orderNumber} for ₦${(order.total / 100).toFixed(2)}`,
       );
+
+      await this.expo.sendPushNotification(store.owner.auth.pushToken, {
+        to: store.owner.auth.pushToken,
+        title: 'New Order Received',
+        data: storeOwnerNotification,
+        body: `You have received a new order #${order.orderNumber} for ₦${(order.total / 100).toFixed(2)}`,
+      });
     }
 
     return buyerNotification;
@@ -154,19 +172,26 @@ export class NotificationService {
     };
 
     if (statusMessages[newStatus] && statusTitles[newStatus]) {
-      await this.createNotification(
+      const buyerNotification = await this.createNotification(
         order.buyerId,
         NotificationType[`ORDER_${newStatus.toUpperCase()}` as keyof typeof NotificationType],
         statusTitles[newStatus],
         `${statusMessages[newStatus]} - Order #${order.orderNumber}`,
       );
+
+      await this.expo.sendPushNotification(order.buyer.auth.pushToken, {
+        data: buyerNotification,
+        to: order.buyer.auth.pushToken,
+        title: statusTitles[newStatus],
+        body: `${statusMessages[newStatus]} - Order #${order.orderNumber}`,
+      });
     }
   }
 
   async notifyOrderItemStatusChange(orderItem: any, _oldStatus: string, newStatus: string) {
     const order = await this.db.query.Order.findFirst({
       where: eq(Order.id, orderItem.orderId),
-      with: { buyer: true },
+      with: { buyer: { with: { auth: true } } },
     });
 
     if (!order) return;
@@ -192,22 +217,38 @@ export class NotificationService {
     };
 
     if (statusMessages[newStatus] && statusTitles[newStatus]) {
-      await this.createNotification(
+      const buyerNotification = await this.createNotification(
         order.buyerId,
         NotificationType[`ORDER_ITEM_${newStatus.toUpperCase()}` as keyof typeof NotificationType],
         statusTitles[newStatus],
         `Your ${product?.name || 'item'} ${statusMessages[newStatus]} - Order #${order.orderNumber}`,
       );
+
+      if (order?.buyer?.auth?.pushToken) {
+        await this.expo.sendPushNotification(order.buyer.auth.pushToken, {
+          data: buyerNotification,
+          to: order.buyer.auth.pushToken,
+          title: statusTitles[newStatus],
+          body: `Your ${product?.name || 'item'} ${statusMessages[newStatus]} - Order #${order.orderNumber}`,
+        });
+      }
     }
   }
 
   async notifyPaymentSuccess(order: any) {
-    await this.createNotification(
+    const buyerNotification = await this.createNotification(
       order.buyerId,
       NotificationType.PAYMENT_SUCCESS,
       'Payment Successful',
       `Payment for order #${order.orderNumber} has been processed successfully. Amount: ₦${(order.total / 100).toFixed(2)}`,
     );
+
+    await this.expo.sendPushNotification(order.buyer.auth.pushToken, {
+      data: buyerNotification,
+      title: 'Payment Successful',
+      to: order.buyer.auth.pushToken,
+      body: `Payment for order #${order.orderNumber} has been processed successfully. Amount: ₦${(order.total / 100).toFixed(2)}`,
+    });
 
     const storeOwners = new Map<number, any>();
 
@@ -224,39 +265,85 @@ export class NotificationService {
     }
 
     for (const [_storeId, store] of storeOwners) {
-      await this.createNotification(
+      const storeOwnerNotification = await this.createNotification(
         store.owner.id,
         NotificationType.PAYMENT_RECEIVED,
         'Payment Received',
         `Payment received for order #${order.orderNumber}. Amount: ₦${(order.total / 100).toFixed(2)}`,
       );
+
+      await this.expo.sendPushNotification(store.owner.auth.pushToken, {
+        title: 'Payment Received',
+        data: storeOwnerNotification,
+        to: store.owner.auth.pushToken,
+        body: `Payment received for order #${order.orderNumber}. Amount: ₦${(order.total / 100).toFixed(2)}`,
+      });
     }
   }
 
   async notifyPaymentFailed(order: any) {
-    await this.createNotification(
+    const buyerNotification = await this.createNotification(
       order.buyerId,
       NotificationType.PAYMENT_FAILED,
       'Payment Failed',
       `Payment for order #${order.orderNumber} has failed. Please try again or contact support.`,
     );
+
+    await this.expo.sendPushNotification(order.buyer.auth.pushToken, {
+      title: 'Payment Failed',
+      data: buyerNotification,
+      to: order.buyer.auth.pushToken,
+      body: `Payment for order #${order.orderNumber} has failed. Please try again or contact support.`,
+    });
   }
 
   async notifyLowStock(product: any, storeOwnerId: number) {
-    await this.createNotification(
+    const storeOwner = await this.db.query.Store.findFirst({
+      where: eq(Store.id, product.storeId),
+      with: { owner: { with: { auth: true } } },
+    });
+
+    if (!storeOwner) return;
+
+    const storeOwnerNotification = await this.createNotification(
       storeOwnerId,
       NotificationType.LOW_STOCK_ALERT,
       'Low Stock Alert',
       `Your product "${product.name}" is running low on stock. Current stock: ${product.stockQuantity}`,
     );
+
+    if (storeOwner?.owner?.auth?.pushToken) {
+      await this.expo.sendPushNotification(storeOwner.owner.auth.pushToken, {
+        title: 'Low Stock Alert',
+        data: storeOwnerNotification,
+        to: storeOwner.owner.auth.pushToken,
+        body: `Your product "${product.name}" is running low on stock. Current stock: ${product.stockQuantity}`,
+      });
+    }
   }
 
   async notifyProductReview(product: any, review: any, storeOwnerId: number) {
-    await this.createNotification(
+    const storeOwner = await this.db.query.Store.findFirst({
+      where: eq(Store.id, product.storeId),
+      with: { owner: { with: { auth: true } } },
+    });
+
+    if (!storeOwner) return;
+
+    const storeOwnerNotification = await this.createNotification(
       storeOwnerId,
       NotificationType.PRODUCT_REVIEW,
       'New Product Review',
       `Your product "${product.name}" received a new ${review.rating}-star review`,
     );
+
+    if (storeOwner?.owner?.auth?.pushToken) {
+      await this.expo.sendPushNotification(storeOwner.owner.auth.pushToken, {
+        title: 'New Product Review',
+        data: storeOwnerNotification,
+        to: storeOwner.owner.auth.pushToken,
+        body: `Your product "${product.name}" received a new ${review.rating}-star review`,
+      });
+    }
   }
 }
