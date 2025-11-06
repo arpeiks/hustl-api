@@ -25,6 +25,7 @@ import { and, eq, gte, or } from 'drizzle-orm';
 import { ArgonService } from '@/services/argon.service';
 import { TokenService } from '@/services/token.service';
 import { MailerService } from '../mailer/mailer.service';
+import { TwilioService } from '../twilio/twilio.service';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { generateOtp, minutesFromNow, sanitizeContact } from '@/utils';
 
@@ -34,6 +35,7 @@ export class AuthService {
     private readonly argon: ArgonService,
     private readonly token: TokenService,
     private readonly mailer: MailerService,
+    private readonly twilio: TwilioService,
     private readonly cloudinary: CloudinaryService,
     @Inject(DATABASE) private readonly provider: TDatabase,
   ) {}
@@ -74,7 +76,7 @@ export class AuthService {
       return { ...user, token };
     });
 
-    // todo send SMS
+    await this.twilio.sendVerificationCode(code, body.phone);
 
     return result;
   }
@@ -220,7 +222,7 @@ export class AuthService {
       expiredAt: minutesFromNow(10),
     });
 
-    // TODO send SMS here
+    if (isPhone) await this.twilio.sendPasswordResetCode(code, body.identifier);
     if (isEmail) await this.mailer.resetPassword({ email: body.identifier, code, expiry: '10 minutes' });
 
     return {};
