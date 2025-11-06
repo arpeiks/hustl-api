@@ -17,6 +17,20 @@ export class ExpoService {
 
   async sendPushNotification(pushToken: string, notification: ExpoPushMessage) {
     if (!this.isExpoPushToken(pushToken)) return;
-    return await this.expo.sendPushNotificationsAsync([{ ...notification, sound: 'default', to: pushToken }]);
+    const payloadDefaults = {
+      priority: (notification as any).priority ?? 'high',
+      channelId: (notification as any).channelId ?? 'default',
+      mutableContent: (notification as any).mutableContent ?? true,
+      contentAvailable: (notification as any).contentAvailable ?? true,
+    } as Partial<ExpoPushMessage> & Record<string, any>;
+
+    const payload: ExpoPushMessage = {
+      ...payloadDefaults,
+      ...notification,
+      to: pushToken,
+      sound: notification.sound ?? 'default',
+    } as ExpoPushMessage;
+
+    return await this.expo.sendPushNotificationsAsync([payload]);
   }
 }
