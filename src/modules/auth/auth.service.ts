@@ -24,6 +24,7 @@ import { DATABASE } from '@/consts';
 import { and, eq, gte, or } from 'drizzle-orm';
 import { ArgonService } from '@/services/argon.service';
 import { TokenService } from '@/services/token.service';
+import { MailerService } from '../mailer/mailer.service';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { generateOtp, minutesFromNow, sanitizeContact } from '@/utils';
 
@@ -32,6 +33,7 @@ export class AuthService {
   constructor(
     private readonly argon: ArgonService,
     private readonly token: TokenService,
+    private readonly mailer: MailerService,
     private readonly cloudinary: CloudinaryService,
     @Inject(DATABASE) private readonly provider: TDatabase,
   ) {}
@@ -48,8 +50,8 @@ export class AuthService {
     if (samePhone) throw new ConflictException('user with this phone already exists');
     if (sameEmail) throw new ConflictException('user with this email already exists');
 
+    const code = generateOtp(4);
     const expiredAt = minutesFromNow(10);
-    const code = Math.random() < 10 ? '0000' : generateOtp(4);
     const hashedPassword = await this.argon.hash(body.password);
     const currencies = await this.provider.query.Currency.findMany();
 
@@ -71,6 +73,8 @@ export class AuthService {
 
       return { ...user, token };
     });
+
+    // todo send SMS
 
     return result;
   }
@@ -152,8 +156,7 @@ export class AuthService {
     if (!user?.id) return {};
     if (user.emailVerifiedAt) return {};
 
-    const code = Math.random() < 10 ? '0000' : generateOtp(4);
-
+    const code = generateOtp(4);
     await this.provider.insert(Otp).values({
       code,
       identifier: body.email,
@@ -161,6 +164,7 @@ export class AuthService {
       expiredAt: minutesFromNow(10),
     });
 
+    await this.mailer.verifyEmail({ email: body.email, code, expiry: '10 minutes' });
     return {};
   }
 
@@ -206,8 +210,8 @@ export class AuthService {
     if (isEmail && !user.emailVerifiedAt) throw new UnprocessableEntityException();
     if (isPhone && !user.phoneVerifiedAt) throw new UnprocessableEntityException();
 
+    const code = generateOtp(4);
     const otpType = isEmail ? 'EMAIL_PASSWORD_RESET' : 'PHONE_PASSWORD_RESET';
-    const code = Math.random() < 10 ? '0000' : generateOtp(4);
 
     await this.provider.insert(Otp).values({
       code,
@@ -215,6 +219,9 @@ export class AuthService {
       identifier: body.identifier,
       expiredAt: minutesFromNow(10),
     });
+
+    // TODO send SMS here
+    if (isEmail) await this.mailer.resetPassword({ email: body.identifier, code, expiry: '10 minutes' });
 
     return {};
   }
