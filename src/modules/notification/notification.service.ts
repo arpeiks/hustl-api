@@ -4,7 +4,7 @@ import { TDatabase } from '@/types';
 import { eq, and, desc } from 'drizzle-orm';
 import { ExpoService } from './expo.service';
 import { Injectable, Inject, NotFoundException } from '@nestjs/common';
-import { NotificationSetting, Notification, TUser, Order, Store, Product } from '../drizzle/schema';
+import { NotificationSetting, Notification, TUser, Order, Store, Product, User } from '../drizzle/schema';
 
 export enum NotificationType {
   ORDER_PLACED = 'ORDER_PLACED',
@@ -345,5 +345,29 @@ export class NotificationService {
         body: `Your product "${product.name}" received a new ${review.rating}-star review`,
       });
     }
+  }
+
+  async sendPushNotificationToUser(body: Dto.SendPushNotificationBody) {
+    const user = await this.db.query.User.findFirst({
+      where: eq(User.id, body.id),
+      with: { auth: true },
+    });
+
+    if (!user) throw new NotFoundException('User not found');
+    if (!user.auth?.pushToken) throw new NotFoundException('User does not have a push token');
+
+    const notificationPayload: any = {
+      to: user.auth.pushToken,
+      title: body.title || 'Notification',
+      body: body.body || 'You have a new notification',
+    };
+
+    if (body.includeData === true && body.data) {
+      notificationPayload.data = body.data;
+    }
+
+    await this.expo.sendPushNotification(user.auth.pushToken, notificationPayload);
+
+    return { success: true, message: 'Push notification sent successfully' };
   }
 }

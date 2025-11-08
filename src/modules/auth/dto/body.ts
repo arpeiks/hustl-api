@@ -13,6 +13,7 @@ export class CreateAccountBody {
   phone: string;
 
   @IsString()
+  @IsOptional()
   pushToken: string;
 
   @IsString()
@@ -31,6 +32,7 @@ export class LoginBody {
   phone: string;
 
   @IsString()
+  @IsOptional()
   pushToken: string;
 
   @IsString()
