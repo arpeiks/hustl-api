@@ -33,6 +33,7 @@ export class ExpoService {
     } as ExpoPushMessage;
 
     const res = await this.expo.sendPushNotificationsAsync([payload]);
+    console.log(res);
     return res?.[0]?.status || 'haba';
   }
 }
