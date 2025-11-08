@@ -366,8 +366,8 @@ export class NotificationService {
       notificationPayload.data = body.data;
     }
 
-    await this.expo.sendPushNotification(user.auth.pushToken, notificationPayload);
+    const mess2 = await this.expo.sendPushNotification(user.auth.pushToken, notificationPayload);
 
-    return { success: true, message: 'Push notification sent successfully' };
+    return { success: true, mess2, message: 'Push notification sent successfully' };
   }
 }

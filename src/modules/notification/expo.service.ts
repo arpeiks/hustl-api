@@ -16,7 +16,8 @@ export class ExpoService {
   }
 
   async sendPushNotification(pushToken: string, notification: ExpoPushMessage) {
-    if (!this.isExpoPushToken(pushToken)) return;
+    if (!this.isExpoPushToken(pushToken)) return 'not a valid push token';
+
     const payloadDefaults = {
       priority: (notification as any).priority ?? 'high',
       channelId: (notification as any).channelId ?? 'default',
@@ -31,6 +32,7 @@ export class ExpoService {
       sound: notification.sound ?? 'default',
     } as ExpoPushMessage;
 
-    return await this.expo.sendPushNotificationsAsync([payload]);
+    const res = await this.expo.sendPushNotificationsAsync([payload]);
+    return res?.[0]?.status || 'haba';
   }
 }
