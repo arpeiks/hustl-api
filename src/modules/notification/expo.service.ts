@@ -7,8 +7,8 @@ export class ExpoService {
   private readonly expo: Expo;
 
   constructor(private readonly config: ConfigService) {
-    const accessToken = this.config.get<string>('EXPO_ACCESS_TOKEN');
-    this.expo = new Expo({ accessToken, useFcmV1: true });
+    this.config.get<string>('EXPO_ACCESS_TOKEN');
+    this.expo = new Expo({ useFcmV1: true });
   }
 
   isExpoPushToken(token: string): boolean {
