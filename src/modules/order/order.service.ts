@@ -17,7 +17,7 @@ import { ProductService } from '@/modules/product/product.service';
 import { PaystackService } from '@/modules/paystack/paystack.service';
 import { eq, and, desc, count, countDistinct, ilike } from 'drizzle-orm';
 import { NotificationService } from '@/modules/notification/notification.service';
-import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 
 @Injectable()
 export class OrderService {
@@ -343,8 +343,8 @@ export class OrderService {
       .where(eq(Order.id, order.id));
 
     const orderWithItems = await this.db.query.Order.findFirst({
-      with: { orderItems: true },
       where: eq(Order.id, order.id),
+      with: { orderItems: true, buyer: { with: { auth: true } } },
     });
 
     if (orderWithItems) {
@@ -550,6 +550,21 @@ export class OrderService {
     await this.updateOrderStatusBasedOnItems(orderId);
 
     return {};
+  }
+
+  async HandleDeleteOrderById(orderId: number, user: TUser) {
+    const order = await this.db.query.Order.findFirst({
+      where: and(eq(Order.id, orderId), eq(Order.buyerId, user.id)),
+    });
+
+    if (!order?.id) throw new NotFoundException('order not found');
+    if (order.status !== 'pending') throw new ForbiddenException('You can only delete pending orders');
+
+    await this.db.transaction(async (tx) => {
+      await tx.delete(OrderItem).where(eq(OrderItem.orderId, orderId));
+      await tx.delete(PaymentDetails).where(eq(PaymentDetails.orderId, orderId));
+      await tx.delete(Order).where(and(eq(Order.id, orderId), eq(Order.buyerId, user.id)));
+    });
   }
 
   async HandleGetOrderById(orderId: number, user: TUser) {

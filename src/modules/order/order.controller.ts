@@ -5,7 +5,7 @@ import { TUser } from '../drizzle/schema';
 import { OrderService } from './order.service';
 import { Auth } from '@/modules/auth/decorators/auth.decorator';
 import { ReqUser } from '@/modules/auth/decorators/user.decorator';
-import { Get, Put, Post, Body, Query, Param, Version, Controller } from '@nestjs/common';
+import { Get, Put, Post, Body, Query, Param, Version, Controller, Delete } from '@nestjs/common';
 
 @Controller('order')
 export class OrderController {
@@ -112,6 +112,14 @@ export class OrderController {
   @Version(VERSION_ONE)
   async HandleCheckout(@ReqUser() user: TUser, @Body() body: Dto.CheckoutBody) {
     const data = await this.orderService.HandleCheckout(user, body);
+    return { data, message: RESPONSE.SUCCESS };
+  }
+
+  @Auth()
+  @Delete(':id')
+  @Version(VERSION_ONE)
+  async HandleDeleteOrderById(@ReqUser() user: TUser, @Param('id') id: number) {
+    const data = await this.orderService.HandleDeleteOrderById(id, user);
     return { data, message: RESPONSE.SUCCESS };
   }
 

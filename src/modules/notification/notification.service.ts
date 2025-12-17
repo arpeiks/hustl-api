@@ -125,7 +125,7 @@ export class NotificationService {
       if (!storeOwners.has(item.storeId)) {
         const store = await this.db.query.Store.findFirst({
           where: eq(Store.id, item.storeId),
-          with: { owner: true },
+          with: { owner: { with: { auth: true } } },
         });
         if (store) {
           storeOwners.set(item.storeId, store);
